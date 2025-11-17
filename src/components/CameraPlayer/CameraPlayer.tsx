@@ -39,7 +39,7 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
     useEffect(() => {
         let destroyed = false;
         const script = document.createElement("script");
-        script.src = "https://rtsp.condominionovaresidence.com/rtsp-relay/index.js";
+        script.src = "/rtsp-relay.js";
         script.async = true;
 
         script.onload = () => {
@@ -84,6 +84,13 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
                 overflow: 'hidden',
                 minWidth: 0,
                 minHeight: 0,
+                border: '0px',
+                transition: 'border-color 0.2s ease',
+                cursor: 'pointer',
+                '&:hover': {
+                    border: '2px solid transparent',
+                    borderColor: 'white',
+                },
                 '& canvas': {
                     maxWidth: '100% !important',
                     maxHeight: '100% !important',
