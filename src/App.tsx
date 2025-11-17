@@ -1,19 +1,8 @@
-import { VoipTest } from "./VoipTest";
-import "./App.css";
+
+import Home from './pages/Home/Home';
 
 function App() {
-  return (
-    <div className="app-root">
-      <h1>POC Portaria – VoIP + CFTV</h1>
-
-      <div className="cards">
-        <div className="card">
-          <h2>Teste VoIP (SIP)</h2>
-          <VoipTest />
-        </div>
-      </div>
-    </div>
-  );
+  return <Home />;
 }
 
 export default App;
