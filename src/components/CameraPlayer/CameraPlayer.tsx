@@ -64,6 +64,7 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
             destroyed = true;
             // Libera contexto WebGL manualmente
             if (canvasRef.current) {
+                // eslint-disable-next-line react-hooks/exhaustive-deps
                 const gl = canvasRef.current.getContext('webgl') || canvasRef.current.getContext('experimental-webgl');
                 if (gl && typeof (gl as WebGLRenderingContext).getExtension === 'function') {
                     const loseCtx = (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context');

@@ -5,7 +5,6 @@ interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> 
     wsUrl?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface PlayerWithDestroy {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     player: any;
