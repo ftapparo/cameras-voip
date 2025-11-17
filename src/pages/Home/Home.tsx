@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
 import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 const Home: React.FC = () => {
 
@@ -23,7 +22,7 @@ const Home: React.FC = () => {
         if (visibleCount < cameras.length) {
             const timer = setTimeout(() => {
                 setVisibleCount(visibleCount + 1);
-            }, 100);
+            }, 250);
             return () => clearTimeout(timer);
         }
     }, [visibleCount, cameras.length]);
@@ -74,7 +73,11 @@ const Home: React.FC = () => {
                         overflow: 'hidden'
                     }}
                 >
-                    <VoipCamera key={voipKey} wsUrl={voipUrl || ''} />
+                    {voipUrl ?
+                        <VoipCamera key={voipKey} wsUrl={voipUrl || ''} />
+                        :
+                        <Typography variant="h6" color="white" sx={{ m: 'auto' }}>Clique em uma câmera para ativar o interfone</Typography>
+                    }
                 </Box>
 
                 {/* Câmeras 1-12 distribuídas corretamente */}

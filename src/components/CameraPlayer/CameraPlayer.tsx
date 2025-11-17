@@ -1,5 +1,5 @@
-import { Box } from '@mui/material';
-import { useRef, useEffect } from 'react'
+import { Box, CircularProgress } from '@mui/material';
+import { useRef, useEffect, useState } from 'react'
 
 interface CameraPlayerProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
     wsUrl: string;
@@ -9,6 +9,8 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
+    const [isVisible, setIsVisible] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Força o redimensionamento do canvas
     const forceCanvasResize = () => {
@@ -36,7 +38,30 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
         };
     }, []);
 
+    // Intersection Observer para detectar quando o componente está visível
     useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setIsVisible(entry.isIntersecting);
+            },
+            {
+                threshold: 0.1, // Começa a carregar quando 10% está visível
+                rootMargin: '50px' // Começa a carregar 50px antes de entrar na tela
+            }
+        );
+
+        if (boxRef.current) {
+            observer.observe(boxRef.current);
+        }
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isVisible) return; // Só carrega quando visível
+
         let destroyed = false;
         const script = document.createElement("script");
         script.src = "/rtsp-relay.js";
@@ -56,6 +81,15 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
             window.loadPlayer({
                 url: wsUrl,
                 canvas: canvasRef.current,
+                onSourceEstablished: () => {
+                    console.log("Conexão estabelecida");
+                },
+                onVideoDecode: () => {
+                    // Remove loading quando o primeiro frame é decodificado
+                    if (!destroyed) {
+                        setIsLoading(false);
+                    }
+                }
             });
         };
         document.body.appendChild(script);
@@ -73,7 +107,7 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
             }
             document.body.removeChild(script);
         };
-    }, [wsUrl]);
+    }, [wsUrl, isVisible]);
 
     return (
         <Box
@@ -85,12 +119,12 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
                 overflow: 'hidden',
                 minWidth: 0,
                 minHeight: 0,
-                border: '0px',
-                transition: 'border-color 0.2s ease',
                 cursor: 'pointer',
+                transition: 'outline 0.1s ease',
+                position: 'relative',
                 '&:hover': {
-                    border: '2px solid transparent',
-                    borderColor: 'white',
+                    outline: '2px solid white',
+                    outlineOffset: '-2px',
                 },
                 '& canvas': {
                     maxWidth: '100% !important',
@@ -99,6 +133,25 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
                 }
             }}
         >
+            {isLoading && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        zIndex: 10
+                    }}
+                >
+                    <CircularProgress sx={{ color: 'white' }} />
+                </Box>
+            )}
+
             <canvas
                 ref={canvasRef}
                 style={{

@@ -1,5 +1,6 @@
-import { Box } from '@mui/material';
-import { useRef, useEffect } from 'react'
+import { Box, Chip, CircularProgress } from '@mui/material';
+import { useRef, useEffect, useState } from 'react';
+import PhoneIcon from '@mui/icons-material/Phone';
 
 interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
     wsUrl?: string;
@@ -16,6 +17,9 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
     const destroyFnRef = useRef<(() => void) | null>(null);
+    const [interfoneAtivo, setInterfoneAtivo] = useState(false);
+    const [isHovering, setIsHovering] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
 
     // Força o redimensionamento do canvas
@@ -62,6 +66,8 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
         let destroyed = false;
 
         const initPlayer = async () => {
+            setIsLoading(true);
+
             // Limpa player anterior se existir
             if (destroyFnRef.current) {
                 console.log("Destruindo player anterior...");
@@ -75,7 +81,7 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
             }
 
             // Aguarda um pouco após destruir o player anterior
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             if (destroyed) return;
 
@@ -91,7 +97,7 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
             }
 
             // Mais um pequeno delay após recriar o canvas
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             if (destroyed) return;
 
@@ -99,10 +105,12 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
 
             if (!canvas) {
                 console.error("Canvas não encontrado");
+                setIsLoading(false);
                 return;
             }
             if (!window.loadPlayer) {
                 console.error("loadPlayer não encontrado no window");
+                setIsLoading(false);
                 return;
             }
 
@@ -112,6 +120,15 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                 const result = await window.loadPlayer({
                     url: wsUrl,
                     canvas: canvas,
+                    onSourceEstablished: () => {
+                        console.log("Conexão estabelecida");
+                    },
+                    onVideoDecode: () => {
+                        // Remove loading quando o primeiro frame é decodificado
+                        if (!destroyed) {
+                            setIsLoading(false);
+                        }
+                    }
                 }) as unknown as PlayerWithDestroy;
 
                 if (!destroyed && result && result.destroy) {
@@ -121,6 +138,7 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                 }
             } catch (error) {
                 console.error("Erro ao carregar player:", error);
+                setIsLoading(false);
             }
         };
 
@@ -182,18 +200,25 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                 overflow: 'hidden',
                 minWidth: 0,
                 minHeight: 0,
-                border: '0px',
-                transition: 'border-color 0.2s ease',
+                position: 'relative',
                 cursor: 'pointer',
-                '&:hover': {
-                    border: '2px solid transparent',
-                    borderColor: 'white',
-                },
+                outline: interfoneAtivo
+                    ? '4px solid #f44336'
+                    : (isHovering ? '4px solid #4CAF50' : 'none'),
+                outlineOffset: '-4px',
+                transition: 'outline 0.1s ease',
                 '& canvas': {
                     maxWidth: '100% !important',
                     maxHeight: '100% !important',
                     objectFit: 'fill !important'
                 }
+            }}
+            onMouseEnter={() => setIsHovering(true)}
+            onMouseLeave={() => setIsHovering(false)}
+            onClick={() => {
+                setInterfoneAtivo(!interfoneAtivo);
+                console.log(`Interfone ${!interfoneAtivo ? 'ativado' : 'desativado'}`);
+                // TODO: Implementar lógica de chamada VOIP
             }}
         >
             <canvas
@@ -210,7 +235,51 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                 }}
                 {...rest}
             />
+
+            {isLoading && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        zIndex: 5
+                    }}
+                >
+                    <CircularProgress size={60} sx={{ color: 'white' }} />
+                </Box>
+            )}
+
+            <Chip
+                icon={<PhoneIcon />}
+                label={interfoneAtivo ? 'Desligar' : 'Ligar'}
+                sx={{
+                    position: 'absolute',
+                    bottom: 16,
+                    right: 16,
+                    width: '180px',
+                    height: '48px',
+                    backgroundColor: interfoneAtivo ? '#f44336' : '#4CAF50',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '1.1rem',
+                    zIndex: 10,
+                    '& .MuiChip-icon': {
+                        color: 'white',
+                        fontSize: '1.5rem'
+                    },
+                    '& .MuiChip-label': {
+                        fontSize: '1.1rem'
+                    }
+                }}
+            />
         </Box>
     );
 };
+
 
