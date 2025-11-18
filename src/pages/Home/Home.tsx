@@ -48,6 +48,9 @@ const Home: React.FC = () => {
     // Estado para controlar chamada ativa (de ramal sem câmera)
     const [activeCallExtension, setActiveCallExtension] = React.useState<string | undefined>(undefined);
 
+    // Estado para controlar chamada sainte (outgoing call)
+    const [isOutgoingCall, setIsOutgoingCall] = React.useState(false);
+
     // Refs para os sons
     const phoneRingRef = React.useRef<HTMLAudioElement | null>(null);
     const phoneCallRef = React.useRef<HTMLAudioElement | null>(null);
@@ -79,6 +82,13 @@ const Home: React.FC = () => {
         setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
     };
 
+    // Função para iniciar chamada sainte (outgoing call)
+    const handleOutgoingCall = () => {
+        console.log('Iniciando chamada sainte...');
+        setIsOutgoingCall(true);
+        // TODO: Implementar lógica de chamada VOIP usando makeCall do useSip
+    };
+
     // Detectar chamadas recebidas e carregar câmera automaticamente se disponível
     React.useEffect(() => {
         if (status.incomingCall) {
@@ -98,16 +108,20 @@ const Home: React.FC = () => {
                 setActiveCallExtension(callerExtension);
                 setVoipUrl(undefined);
             }
+
+            // Limpa chamada sainte se houver
+            setIsOutgoingCall(false);
         } else if (status.inCall && activeCallExtension) {
             // Mantém activeCallExtension durante a chamada
             // Não faz nada aqui, apenas mantém o estado
         } else if (!status.inCall && !status.incomingCall) {
             // Limpa tudo quando não há chamada
             setActiveCallExtension(undefined);
+            setIsOutgoingCall(false);
         }
     }, [status.incomingCall, status.inCall, cameras, activeCallExtension]);
 
-    // Tocar som quando receber chamada (phone-ring.mp3)
+    // Tocar som quando receber chamada entrante (phone-ring.mp3)
     React.useEffect(() => {
         if (status.incomingCall && phoneRingRef.current) {
             phoneRingRef.current.loop = true;
@@ -118,16 +132,22 @@ const Home: React.FC = () => {
         }
     }, [status.incomingCall]);
 
-    // Tocar som quando a chamada for atendida (phone-call.mp3)
+    // Tocar som quando fazer chamada sainte (phone-call.mp3)
+    // Toca quando isOutgoingCall está ativo e para quando a chamada é atendida (status.inCall)
     React.useEffect(() => {
-        if (status.inCall && !status.incomingCall && phoneCallRef.current) {
+        if (isOutgoingCall && !status.inCall && phoneCallRef.current) {
             phoneCallRef.current.loop = true;
             phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
         } else if (phoneCallRef.current) {
             phoneCallRef.current.pause();
             phoneCallRef.current.currentTime = 0;
         }
-    }, [status.inCall, status.incomingCall]);
+
+        // Para a chamada sainte quando atende
+        if (status.inCall && isOutgoingCall) {
+            setIsOutgoingCall(false);
+        }
+    }, [isOutgoingCall, status.inCall]);
 
     if (loading) {
         return (
@@ -156,14 +176,18 @@ const Home: React.FC = () => {
                         gridColumn: '1 / 3',
                         gridRow: '1 / 3',
                         background: '#000',
-                        border: status.incomingCall ? '4px solid #4caf50' : status.inCall && activeCallExtension ? '4px solid #f44336' : '1px solid #333',
+                        border: status.incomingCall
+                            ? '4px solid #4caf50'
+                            : (status.inCall || activeCallExtension)
+                                ? '4px solid #f44336'
+                                : '1px solid #333',
                         display: 'flex',
                         alignItems: 'stretch',
                         justifyContent: 'stretch',
                         minWidth: 0,
                         minHeight: 0,
                         overflow: 'hidden',
-                        animation: status.incomingCall ? 'blink-border 1s infinite' : status.inCall && activeCallExtension ? 'blink-border-red 1s infinite' : 'none',
+                        animation: status.incomingCall ? 'blink-border 1s infinite' : 'none',
                         '@keyframes blink-border': {
                             '0%, 100%': {
                                 borderColor: '#4caf50',
@@ -172,16 +196,6 @@ const Home: React.FC = () => {
                             '50%': {
                                 borderColor: '#2e7d32',
                                 boxShadow: '0 0 10px #2e7d32'
-                            }
-                        },
-                        '@keyframes blink-border-red': {
-                            '0%, 100%': {
-                                borderColor: '#f44336',
-                                boxShadow: '0 0 20px #f44336'
-                            },
-                            '50%': {
-                                borderColor: '#c62828',
-                                boxShadow: '0 0 10px #c62828'
                             }
                         }
                     }}
@@ -206,6 +220,14 @@ const Home: React.FC = () => {
                                 isInCall={false}
                             />
                         )
+                    ) : status.inCall && voipUrl ? (
+                        // Chamada ativa com câmera - mostra VoipCamera com botão ENCERRAR
+                        <VoipCamera
+                            key={voipKey}
+                            wsUrl={voipUrl}
+                            isInCall={true}
+                            onHangup={hangup}
+                        />
                     ) : activeCallExtension ? (
                         // Chamada ativa de ramal sem câmera
                         <IncomingCall
@@ -216,8 +238,12 @@ const Home: React.FC = () => {
                             onHangup={hangup}
                         />
                     ) : voipUrl ? (
-                        // Chamada ativa ou câmera selecionada manualmente
-                        <VoipCamera key={voipKey} wsUrl={voipUrl} />
+                        // Câmera selecionada manualmente (sem chamada)
+                        <VoipCamera
+                            key={voipKey}
+                            wsUrl={voipUrl}
+                            onClick={handleOutgoingCall}
+                        />
                     ) : (
                         // Nenhuma atividade
                         <Typography variant="h6" color="white" sx={{ m: 'auto' }}>

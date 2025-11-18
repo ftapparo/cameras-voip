@@ -1,4 +1,4 @@
-import { Box, Chip, CircularProgress } from '@mui/material';
+import { Box, Chip, CircularProgress, IconButton } from '@mui/material';
 import { useRef, useEffect, useState } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CallEndIcon from '@mui/icons-material/CallEnd';
@@ -7,7 +7,9 @@ interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> 
     wsUrl?: string;
     onClick?: () => void;
     isIncomingCall?: boolean;
+    isInCall?: boolean;
     onReject?: () => void;
+    onHangup?: () => void;
 }
 
 interface PlayerWithDestroy {
@@ -16,7 +18,7 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, onReject, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, onReject, onHangup, ...rest }: VoipCameraProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -385,31 +387,73 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, onReject, .
                         }}
                     />
                 </Box>
+            ) : isInCall ? (
+                // Em chamada ativa - botão ENCERRAR centralizado
+                <Box sx={{
+                    position: 'absolute',
+                    bottom: 20,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 10
+                }}>
+                    <Chip
+                        icon={<CallEndIcon />}
+                        label="ENCERRAR"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onHangup) onHangup();
+                        }}
+                        sx={{
+                            width: '200px',
+                            height: '56px',
+                            backgroundColor: '#d32f2f',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '1.2rem',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase',
+                            '&:hover': {
+                                backgroundColor: '#b71c1c'
+                            },
+                            '& .MuiChip-icon': {
+                                color: 'white',
+                                fontSize: '1.6rem'
+                            },
+                            '& .MuiChip-label': {
+                                fontSize: '1.2rem',
+                                fontWeight: 'bold'
+                            }
+                        }}
+                    />
+                </Box>
             ) : (
-                // Comportamento normal - botão Ligar/Desligar
-                <Chip
-                    icon={<PhoneIcon />}
-                    label={interfoneAtivo ? 'Desligar' : 'Ligar'}
+                // Comportamento normal - botão circular Ligar/Desligar
+                <IconButton
+                    onClick={() => {
+                        if (onClick) {
+                            onClick();
+                        } else {
+                            setInterfoneAtivo(!interfoneAtivo);
+                            console.log(`Interfone ${!interfoneAtivo ? 'ativado' : 'desativado'}`);
+                        }
+                    }}
                     sx={{
                         position: 'absolute',
                         bottom: 16,
                         right: 16,
-                        width: '180px',
-                        height: '48px',
+                        width: '64px',
+                        height: '64px',
                         backgroundColor: interfoneAtivo ? '#f44336' : '#4CAF50',
                         color: 'white',
-                        fontWeight: 'bold',
-                        fontSize: '1.1rem',
                         zIndex: 10,
-                        '& .MuiChip-icon': {
-                            color: 'white',
-                            fontSize: '1.5rem'
+                        '&:hover': {
+                            backgroundColor: interfoneAtivo ? '#d32f2f' : '#388e3c',
                         },
-                        '& .MuiChip-label': {
-                            fontSize: '1.1rem'
-                        }
+                        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)'
                     }}
-                />
+                >
+                    <PhoneIcon sx={{ fontSize: '2rem' }} />
+                </IconButton>
             )}
         </Box>
     );
