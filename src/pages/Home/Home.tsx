@@ -156,22 +156,29 @@ const Home: React.FC = () => {
         }
     }, [status.incomingCall]);
 
-    // Parar som quando a chamada é confirmada/atendida (phone-call.mp3)
+    // Parar som quando a chamada é confirmada/atendida ou cancelada (phone-call.mp3)
     React.useEffect(() => {
-        console.log(`[Audio Debug] callConfirmed: ${status.callConfirmed}, isOutgoingCall: ${isOutgoingCall}`);
+        console.log(`[Audio Debug] callConfirmed: ${status.callConfirmed}, isOutgoingCall: ${isOutgoingCall}, inCall: ${status.inCall}`);
 
-        // Para o som quando a chamada é confirmada (atendida)
-        if (status.callConfirmed && phoneCallRef.current) {
-            console.log('[Audio] Parando phone-call.mp3 - chamada atendida');
-            phoneCallRef.current.pause();
-            phoneCallRef.current.currentTime = 0;
+        // Para o som quando:
+        // 1. A chamada é confirmada (atendida)
+        // 2. isOutgoingCall fica false (cancelou antes de atender)
+        // 3. inCall fica false (chamada encerrada)
+        if ((status.callConfirmed || !isOutgoingCall || !status.inCall) && phoneCallRef.current) {
+            const shouldStop = status.callConfirmed || (!isOutgoingCall && phoneCallRef.current.currentTime > 0) || (!status.inCall && phoneCallRef.current.currentTime > 0);
 
-            // Limpa o estado de outgoing call
-            if (isOutgoingCall) {
+            if (shouldStop) {
+                console.log('[Audio] Parando phone-call.mp3');
+                phoneCallRef.current.pause();
+                phoneCallRef.current.currentTime = 0;
+            }
+
+            // Limpa o estado de outgoing call quando necessário
+            if (isOutgoingCall && (status.callConfirmed || !status.inCall)) {
                 setIsOutgoingCall(false);
             }
         }
-    }, [status.callConfirmed, isOutgoingCall]);
+    }, [status.callConfirmed, isOutgoingCall, status.inCall]);
 
     if (loading) {
         return (
