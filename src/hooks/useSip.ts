@@ -74,20 +74,36 @@ export const useSip = () => {
     }, []);
 
     const attachRemoteAudio = (session: any) => {
-        session.connection.addEventListener('track', (event: any) => {
-            const [stream] = event.streams;
-            console.log('[Audio] Track recebido:', event.track.kind);
+        let retries = 0;
+        const maxRetries = 50; // 5 segundos com polling de 100ms
+
+        const tryAttachAudio = () => {
             if (remoteAudioRef.current) {
-                remoteAudioRef.current.srcObject = stream;
-                remoteAudioRef.current.volume = 1; // Volume máximo
-                remoteAudioRef.current.play().catch((err) => {
-                    console.error('[Audio] Erro ao reproduzir:', err);
+                console.log('[Audio] Ref encontrado após retentativas:', retries);
+                session.connection.addEventListener('track', (event: any) => {
+                    const [stream] = event.streams;
+                    console.log('[Audio] Track recebido:', event.track.kind);
+                    if (remoteAudioRef.current) {
+                        remoteAudioRef.current.srcObject = stream;
+                        remoteAudioRef.current.volume = 1;
+                        remoteAudioRef.current.play().catch((err) => {
+                            console.error('[Audio] Erro ao reproduzir:', err);
+                        });
+                        console.log('[Audio] Stream configurado e iniciando reprodução');
+                    }
                 });
-                console.log('[Audio] Stream configurado e iniciando reprodução');
-            } else {
-                console.warn('[Audio] remoteAudioRef não está disponível');
+                return;
             }
-        });
+
+            if (retries < maxRetries) {
+                retries++;
+                setTimeout(tryAttachAudio, 100);
+            } else {
+                console.error('[Audio] remoteAudioRef não encontrado após múltiplas tentativas');
+            }
+        };
+
+        tryAttachAudio();
     };
 
     const startUA = (sipConfig: SipConfig) => {
