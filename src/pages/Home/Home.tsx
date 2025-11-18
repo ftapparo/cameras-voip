@@ -15,7 +15,7 @@ interface Camera {
 
 const Home: React.FC = () => {
     // Hook SIP
-    const { status, remoteAudioRef, connect, answerCall } = useSip();
+    const { status, remoteAudioRef, connect, answerCall, hangup } = useSip();
 
     // Estado para armazenar as câmeras carregadas da API
     const [cameras, setCameras] = React.useState<Camera[]>([]);
@@ -44,6 +44,13 @@ const Home: React.FC = () => {
     // Estado para a área VoIP
     const [voipUrl, setVoipUrl] = React.useState<string | undefined>(undefined);
     const [voipKey, setVoipKey] = React.useState(0);
+
+    // Estado para controlar chamada ativa (de ramal sem câmera)
+    const [activeCallExtension, setActiveCallExtension] = React.useState<string | undefined>(undefined);
+
+    // Refs para os sons
+    const phoneRingRef = React.useRef<HTMLAudioElement | null>(null);
+    const phoneCallRef = React.useRef<HTMLAudioElement | null>(null);
 
     React.useEffect(() => {
         if (visibleCount < cameras.length) {
@@ -85,12 +92,42 @@ const Home: React.FC = () => {
                 const highDefUrl = getCameraUrl(camera.name, true);
                 setVoipUrl(highDefUrl);
                 setVoipKey(prev => prev + 1);
+                setActiveCallExtension(undefined); // Limpa chamada sem câmera se houver
             } else {
-                // Limpa a URL para mostrar o componente IncomingCall
+                // Marca que há uma chamada de ramal sem câmera
+                setActiveCallExtension(callerExtension);
                 setVoipUrl(undefined);
             }
+        } else if (status.inCall && activeCallExtension) {
+            // Mantém activeCallExtension durante a chamada
+            // Não faz nada aqui, apenas mantém o estado
+        } else if (!status.inCall && !status.incomingCall) {
+            // Limpa tudo quando não há chamada
+            setActiveCallExtension(undefined);
         }
-    }, [status.incomingCall, cameras]);
+    }, [status.incomingCall, status.inCall, cameras, activeCallExtension]);
+
+    // Tocar som quando receber chamada (phone-ring.mp3)
+    React.useEffect(() => {
+        if (status.incomingCall && phoneRingRef.current) {
+            phoneRingRef.current.loop = true;
+            phoneRingRef.current.play().catch(err => console.error('Erro ao tocar phone-ring:', err));
+        } else if (phoneRingRef.current) {
+            phoneRingRef.current.pause();
+            phoneRingRef.current.currentTime = 0;
+        }
+    }, [status.incomingCall]);
+
+    // Tocar som quando a chamada for atendida (phone-call.mp3)
+    React.useEffect(() => {
+        if (status.inCall && !status.incomingCall && phoneCallRef.current) {
+            phoneCallRef.current.loop = true;
+            phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
+        } else if (phoneCallRef.current) {
+            phoneCallRef.current.pause();
+            phoneCallRef.current.currentTime = 0;
+        }
+    }, [status.inCall, status.incomingCall]);
 
     if (loading) {
         return (
@@ -119,14 +156,14 @@ const Home: React.FC = () => {
                         gridColumn: '1 / 3',
                         gridRow: '1 / 3',
                         background: '#000',
-                        border: status.incomingCall ? '4px solid #4caf50' : '1px solid #333',
+                        border: status.incomingCall ? '4px solid #4caf50' : status.inCall && activeCallExtension ? '4px solid #f44336' : '1px solid #333',
                         display: 'flex',
                         alignItems: 'stretch',
                         justifyContent: 'stretch',
                         minWidth: 0,
                         minHeight: 0,
                         overflow: 'hidden',
-                        animation: status.incomingCall ? 'blink-border 1s infinite' : 'none',
+                        animation: status.incomingCall ? 'blink-border 1s infinite' : status.inCall && activeCallExtension ? 'blink-border-red 1s infinite' : 'none',
                         '@keyframes blink-border': {
                             '0%, 100%': {
                                 borderColor: '#4caf50',
@@ -135,6 +172,16 @@ const Home: React.FC = () => {
                             '50%': {
                                 borderColor: '#2e7d32',
                                 boxShadow: '0 0 10px #2e7d32'
+                            }
+                        },
+                        '@keyframes blink-border-red': {
+                            '0%, 100%': {
+                                borderColor: '#f44336',
+                                boxShadow: '0 0 20px #f44336'
+                            },
+                            '50%': {
+                                borderColor: '#c62828',
+                                boxShadow: '0 0 10px #c62828'
                             }
                         }
                     }}
@@ -154,8 +201,18 @@ const Home: React.FC = () => {
                                 callerExtension={status.incomingCall.callerExtension}
                                 description={cameras.find(c => c.extension === status.incomingCall?.callerExtension)?.description}
                                 onAnswer={answerCall}
+                                isInCall={false}
                             />
                         )
+                    ) : activeCallExtension ? (
+                        // Chamada ativa de ramal sem câmera
+                        <IncomingCall
+                            callerExtension={activeCallExtension}
+                            description={cameras.find(c => c.extension === activeCallExtension)?.description}
+                            onAnswer={answerCall}
+                            isInCall={true}
+                            onHangup={hangup}
+                        />
                     ) : voipUrl ? (
                         // Chamada ativa ou câmera selecionada manualmente
                         <VoipCamera key={voipKey} wsUrl={voipUrl} />
@@ -256,6 +313,10 @@ const Home: React.FC = () => {
 
             {/* Áudio remoto SIP */}
             <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
+
+            {/* Sons de chamada */}
+            <audio ref={phoneRingRef} src="/phone-ring.mp3" style={{ display: 'none' }} />
+            <audio ref={phoneCallRef} src="/phone-call.mp3" style={{ display: 'none' }} />
 
             {/* Barra de Status SIP */}
             <SipStatusBar
