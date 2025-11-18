@@ -1,0 +1,21 @@
+{
+  "appId": "com.portaria.voip.camera",
+  "productName": "Portaria VoIP Camera",
+  "directories": {
+    "buildResources": "public"
+  },
+  "files": [
+    "dist/**",
+    "electron-main.cjs",
+    "public/**"
+  ],
+  "win": {
+    "icon": "public/icon-512x512.png",
+    "target": "nsis"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": false
+  }
+}

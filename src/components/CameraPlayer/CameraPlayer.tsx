@@ -79,7 +79,7 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
             releaseQueueRef.current = releaseQueue;
 
             const script = document.createElement("script");
-            script.src = "/rtsp-relay.js";
+            script.src = "rtsp-relay.js";
             script.async = true;
 
             script.onload = async () => {

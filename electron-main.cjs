@@ -5,6 +5,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, 'public', 'icon-512x512.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -15,9 +16,17 @@ function createWindow() {
   if (process.env.NODE_ENV === 'development') {
     win.loadURL('http://localhost:5173');
   } else {
-    win.loadFile(path.join(__dirname, 'dist', 'index.html'));
+      const indexPath = path.join(__dirname, 'dist', 'index.html');
+      console.log('Carregando arquivo:', indexPath);
+      win.loadFile(indexPath).catch((err) => {
+        console.error('Erro ao carregar index.html:', err);
+        win.webContents.executeJavaScript(`document.body.innerHTML = '<h2 style="color:red">Erro ao carregar index.html</h2><pre>${err}</pre>'`);
+      });
   }
-}
+  // Abre DevTools para debug
+  win.webContents.openDevTools();
+  }
+
 
 app.whenReady().then(() => {
   createWindow();

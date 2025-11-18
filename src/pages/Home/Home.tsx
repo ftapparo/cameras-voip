@@ -425,8 +425,8 @@ const Home: React.FC = () => {
             <audio ref={remoteAudioRef} autoPlay playsInline muted={false} style={{ display: 'none' }} />
 
             {/* Sons de chamada */}
-            <audio ref={phoneRingRef} src="/phone-ring.mp3" style={{ display: 'none' }} />
-            <audio ref={phoneCallRef} src="/phone-call.mp3" style={{ display: 'none' }} />
+            <audio ref={phoneRingRef} src="phone-ring.mp3" style={{ display: 'none' }} />
+            <audio ref={phoneCallRef} src="phone-call.mp3" style={{ display: 'none' }} />
 
             {/* Barra de Status SIP */}
             <SipStatusBar

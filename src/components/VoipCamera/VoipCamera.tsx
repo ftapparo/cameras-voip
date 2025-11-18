@@ -193,7 +193,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
         };
 
         // Verifica se o script já existe
-        const existingScript = document.querySelector('script[src="/rtsp-relay.js"]');
+        const existingScript = document.querySelector('script[src="rtsp-relay.js"]');
 
         if (existingScript && window.loadPlayer) {
             // Script já carregado, executa direto
@@ -202,7 +202,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
         } else if (!existingScript) {
             // Script não existe, cria novo
             const script = document.createElement("script");
-            script.src = "/rtsp-relay.js";
+            script.src = "rtsp-relay.js";
             script.async = true;
             script.onload = () => {
                 console.log("Script carregado, iniciando player...");
