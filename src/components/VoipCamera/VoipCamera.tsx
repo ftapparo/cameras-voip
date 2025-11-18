@@ -258,9 +258,11 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 minHeight: 0,
                 position: 'relative',
                 cursor: 'pointer',
-                outline: interfoneAtivo
+                outline: isInCall
                     ? '4px solid #f44336'
-                    : (isHovering && !isInCall && !isIncomingCall && !isOutgoingCall ? '4px solid #4CAF50' : 'none'),
+                    : isOutgoingCall
+                        ? 'none'
+                        : (isHovering && !isIncomingCall ? '4px solid #4CAF50' : 'none'),
                 outlineOffset: '-4px',
                 transition: 'outline 0.1s ease',
                 animation: isOutgoingCall ? 'blink-border 1s infinite' : 'none',
@@ -278,14 +280,17 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             onMouseEnter={() => !isInCall && !isIncomingCall && !isOutgoingCall && setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
             onClick={() => {
-                // Se há onClick (para atender chamada), executa-o
-                if (onClick) {
-                    onClick();
-                } else {
-                    // Comportamento normal de ativar/desativar interfone
-                    setInterfoneAtivo(!interfoneAtivo);
-                    console.log(`Interfone ${!interfoneAtivo ? 'ativado' : 'desativado'}`);
-                    // TODO: Implementar lógica de chamada VOIP
+                // isIncomingCall: clica no canvas, atende a chamada
+                if (isIncomingCall) {
+                    if (onClick) onClick();
+                }
+                // isOutgoingCall ou isInCall: clica no canvas, encerra a chamada
+                else if (isOutgoingCall || isInCall) {
+                    if (onHangup) onHangup();
+                }
+                // Sem chamada: clica no canvas, inicia uma chamada
+                else {
+                    if (onClick) onClick();
                 }
             }}
         >
