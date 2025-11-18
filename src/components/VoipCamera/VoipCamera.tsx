@@ -20,6 +20,10 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
     const [interfoneAtivo, setInterfoneAtivo] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
+    const retryTimeoutRef = useRef<number | null>(null);
+    const loadSuccessRef = useRef(false);
+    const MAX_RETRIES = 3;
 
 
     // Força o redimensionamento do canvas
@@ -65,8 +69,30 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
 
         let destroyed = false;
 
+        const handleLoadError = () => {
+            if (destroyed) return;
+
+            if (retryCount < MAX_RETRIES) {
+                const nextRetry = retryCount + 1;
+                console.log(`[VoIP ${wsUrl}] Tentando reconectar (${nextRetry}/${MAX_RETRIES})...`);
+                setRetryCount(nextRetry);
+
+                // Aguarda 2s antes de tentar novamente
+                retryTimeoutRef.current = window.setTimeout(() => {
+                    if (!destroyed) {
+                        initPlayer();
+                    }
+                }, 2000);
+            } else {
+                console.error(`[VoIP ${wsUrl}] Falha após ${MAX_RETRIES} tentativas`);
+                setIsLoading(false);
+            }
+        };
+
         const initPlayer = async () => {
             setIsLoading(true);
+            loadSuccessRef.current = false;
+            let init = true;
 
             // Limpa player anterior se existir
             if (destroyFnRef.current) {
@@ -114,19 +140,27 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                 return;
             }
 
-            console.log("Iniciando player WebRTC Relay...");
+            console.log(`[VoIP ${wsUrl}] Iniciando player (tentativa ${retryCount + 1}/${MAX_RETRIES})...`);
 
             try {
                 const result = await window.loadPlayer({
                     url: wsUrl,
                     canvas: canvas,
                     onSourceEstablished: () => {
-                        console.log("Conexão estabelecida");
+                        console.log(`[VoIP ${wsUrl}] Conexão estabelecida`);
+                        loadSuccessRef.current = true;
+                        setRetryCount(0);
                     },
                     onVideoDecode: () => {
                         // Remove loading quando o primeiro frame é decodificado
                         if (!destroyed) {
-                            setIsLoading(false);
+                            if (init) {
+                                console.log(`[VoIP ${wsUrl}] Vídeo carregado com sucesso`);
+                                setIsLoading(false);
+                                loadSuccessRef.current = true;
+                                setRetryCount(0);
+                                init = false;
+                            }
                         }
                     }
                 }) as unknown as PlayerWithDestroy;
@@ -136,8 +170,17 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                     playerLoadedRef.current = true;
                     console.log("Player carregado com sucesso");
                 }
+
+                // Timeout de segurança
+                retryTimeoutRef.current = window.setTimeout(() => {
+                    if (!loadSuccessRef.current && !destroyed) {
+                        console.warn(`[VoIP ${wsUrl}] Timeout - nenhum frame recebido em 10s`);
+                        handleLoadError();
+                    }
+                }, 10000);
             } catch (error) {
-                console.error("Erro ao carregar player:", error);
+                console.error(`[VoIP ${wsUrl}] Erro ao carregar player:`, error);
+                handleLoadError();
                 setIsLoading(false);
             }
         };
@@ -177,6 +220,12 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
         return () => {
             destroyed = true;
 
+            // Limpa timeout de retry
+            if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+                retryTimeoutRef.current = null;
+            }
+
             // Chama a função destroy se disponível
             if (destroyFnRef.current) {
                 console.log("Destruindo player no cleanup...");
@@ -188,7 +237,7 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
                 destroyFnRef.current = null;
             }
         };
-    }, [wsUrl]);
+    }, [wsUrl, retryCount, MAX_RETRIES]);
 
     return (
         <Box

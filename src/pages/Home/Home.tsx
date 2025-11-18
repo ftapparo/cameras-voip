@@ -1,15 +1,41 @@
 import React from 'react';
+import axios from 'axios';
 import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
 import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
+import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
+import { useSip } from '../../hooks/useSip';
 import { Box, Typography } from '@mui/material';
 
-const Home: React.FC = () => {
+interface Camera {
+    name: string;
+    description: string;
+    extension: string;
+}
 
-    // 11 câmeras (conforme layout)
-    const cameras = Array.from({ length: 12 }, (_, i) => ({
-        name: String(i + 1),
-        description: `Câmera ${i + 1}`,
-    }));
+const Home: React.FC = () => {
+    // Hook SIP
+    const { status, remoteAudioRef, connect } = useSip();
+
+    // Estado para armazenar as câmeras carregadas da API
+    const [cameras, setCameras] = React.useState<Camera[]>([]);
+    const [loading, setLoading] = React.useState(true);
+
+    // Carregar câmeras da API (máximo de 12)
+    React.useEffect(() => {
+        const fetchCameras = async () => {
+            try {
+                const response = await axios.get('https://rtsp.condominionovaresidence.com/api/v1/camera/list');
+                // Limita para as 12 primeiras câmeras
+                setCameras(response.data.cameras.slice(0, 12));
+                setLoading(false);
+            } catch (error) {
+                console.error('Erro ao carregar câmeras:', error);
+                setLoading(false);
+            }
+        };
+
+        fetchCameras();
+    }, []);
 
     // Estado para controlar quantas câmeras estão visíveis
     const [visibleCount, setVisibleCount] = React.useState(1);
@@ -22,7 +48,7 @@ const Home: React.FC = () => {
         if (visibleCount < cameras.length) {
             const timer = setTimeout(() => {
                 setVisibleCount(visibleCount + 1);
-            }, 250);
+            }, 250); // Aumentado para 800ms para dar mais tempo entre câmeras
             return () => clearTimeout(timer);
         }
     }, [visibleCount, cameras.length]);
@@ -45,8 +71,16 @@ const Home: React.FC = () => {
         setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
     };
 
+    if (loading) {
+        return (
+            <Box sx={{ width: '100vw', height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="h5" color="white">Carregando câmeras...</Typography>
+            </Box>
+        );
+    }
+
     return (
-        <Box sx={{ width: '100vw', height: '100vh', background: '#000', m: 0, p: 0, overflow: 'hidden', position: 'fixed', top: 0, left: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'stretch' }}>
+        <Box sx={{ width: '100vw', height: '100vh', background: '#000', m: 0, p: 0, overflow: 'hidden', position: 'fixed', top: 0, left: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'stretch', paddingBottom: '50px' }}>
             <Box sx={{
                 width: '100%',
                 height: '100%',
@@ -166,6 +200,17 @@ const Home: React.FC = () => {
                     }
                 })}
             </Box>
+
+            {/* Áudio remoto SIP */}
+            <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
+
+            {/* Barra de Status SIP */}
+            <SipStatusBar
+                isConnected={status.isConnected}
+                isRegistered={status.isRegistered}
+                extension={status.extension}
+                onConfigSave={connect}
+            />
         </Box>
     );
 };
