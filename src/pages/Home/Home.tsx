@@ -21,13 +21,13 @@ const Home: React.FC = () => {
     const [cameras, setCameras] = React.useState<Camera[]>([]);
     const [loading, setLoading] = React.useState(true);
 
-    // Carregar câmeras da API (máximo de 12)
+    // Carregar câmeras da API (máximo de 14)
     React.useEffect(() => {
         const fetchCameras = async () => {
             try {
                 const response = await axios.get('https://rtsp.condominionovaresidence.com/api/v1/camera/list');
-                // Limita para as 12 primeiras câmeras
-                setCameras(response.data.cameras.slice(0, 12));
+                // Limita para as 14 primeiras câmeras
+                setCameras(response.data.cameras.slice(0, 14));
                 setLoading(false);
             } catch (error) {
                 console.error('Erro ao carregar câmeras:', error);
@@ -194,18 +194,18 @@ const Home: React.FC = () => {
                 width: '100%',
                 height: '100%',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                gridTemplateRows: 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', // 4 colunas
+                gridTemplateRows: 'repeat(5, minmax(0, 1fr))',    // 5 linhas
                 gap: 0,
                 m: 0,
                 p: 0,
                 overflow: 'hidden',
             }}>
-                {/* Área VoIP A - único bloco grande 2x2 */}
+                {/* Área VoIP - bloco 2x3 */}
                 <Box
                     sx={{
                         gridColumn: '1 / 3',
-                        gridRow: '1 / 3',
+                        gridRow: '1 / 4',
                         background: '#000',
                         border: '1px solid #333',
                         outline: status.incomingCall
@@ -297,90 +297,62 @@ const Home: React.FC = () => {
                     )}
                 </Box>
 
-                {/* Câmeras 1-12 distribuídas corretamente */}
-                {cameras.slice(0, Math.min(visibleCount, 12)).map((cam, index) => {
-                    // Câmeras 1-2 (primeira linha, lado direito)
+                {/* Câmeras 1-14 distribuídas */}
+                {cameras.slice(0, Math.min(visibleCount, 14)).map((cam, index) => {
+                    let gridColumn, gridRow;
+
+                    // Câmeras 1-2 (linha 1, colunas 3-4)
                     if (index < 2) {
-                        return (
-                            <Box
-                                key={cam.name}
-                                onClick={() => handleCameraClick(cam.name)}
-                                sx={{
-                                    gridColumn: `${3 + index} / ${4 + index}`,
-                                    gridRow: '1 / 2',
-                                    width: '100%',
-                                    height: '100%',
-                                    background: '#000',
-                                    border: '1px solid #333',
-                                    m: 0,
-                                    p: 0,
-                                    display: 'flex',
-                                    alignItems: 'stretch',
-                                    justifyContent: 'stretch',
-                                    minWidth: 0,
-                                    minHeight: 0,
-                                    overflow: 'hidden'
-                                }}
-                            >
-                                <CameraPlayer wsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
-                            </Box>
-                        );
+                        gridColumn = `${3 + index} / ${4 + index}`;
+                        gridRow = '1 / 2';
                     }
-                    // Câmeras 3-4 (segunda linha, lado direito)
+                    // Câmeras 3-4 (linha 2, colunas 3-4)
                     else if (index < 4) {
-                        return (
-                            <Box
-                                key={cam.name}
-                                onClick={() => handleCameraClick(cam.name)}
-                                sx={{
-                                    gridColumn: `${3 + (index - 2)} / ${4 + (index - 2)}`,
-                                    gridRow: '2 / 3',
-                                    width: '100%',
-                                    height: '100%',
-                                    background: '#000',
-                                    border: '1px solid #333',
-                                    m: 0,
-                                    p: 0,
-                                    display: 'flex',
-                                    alignItems: 'stretch',
-                                    justifyContent: 'stretch',
-                                    minWidth: 0,
-                                    minHeight: 0,
-                                    overflow: 'hidden'
-                                }}
-                            >
-                                <CameraPlayer wsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
-                            </Box>
-                        );
+                        gridColumn = `${3 + (index - 2)} / ${4 + (index - 2)}`;
+                        gridRow = '2 / 3';
                     }
-                    // Câmeras 5-12 (terceira e quarta linha, todas as colunas)
+                    // Câmeras 5-6 (linha 3, colunas 3-4)
+                    else if (index < 6) {
+                        gridColumn = `${3 + (index - 4)} / ${4 + (index - 4)}`;
+                        gridRow = '3 / 4';
+                    }
+                    // Câmeras 7-10 (linha 4, colunas 1-4)
+                    else if (index < 10) {
+                        const col = (index - 6);
+                        gridColumn = `${col + 1} / ${col + 2}`;
+                        gridRow = '4 / 5';
+                    }
+                    // Câmeras 11-14 (linha 5, colunas 1-4)
                     else {
-                        const adjustedIndex = index - 4; // 0-7 para câmeras 5-12
-                        return (
-                            <Box
-                                key={cam.name}
-                                onClick={() => handleCameraClick(cam.name)}
-                                sx={{
-                                    gridColumn: `${(adjustedIndex % 4) + 1} / ${(adjustedIndex % 4) + 2}`,
-                                    gridRow: `${Math.floor(adjustedIndex / 4) + 3} / ${Math.floor(adjustedIndex / 4) + 4}`,
-                                    width: '100%',
-                                    height: '100%',
-                                    background: '#000',
-                                    border: '1px solid #333',
-                                    m: 0,
-                                    p: 0,
-                                    display: 'flex',
-                                    alignItems: 'stretch',
-                                    justifyContent: 'stretch',
-                                    minWidth: 0,
-                                    minHeight: 0,
-                                    overflow: 'hidden'
-                                }}
-                            >
-                                <CameraPlayer wsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
-                            </Box>
-                        );
+                        const col = (index - 10);
+                        gridColumn = `${col + 1} / ${col + 2}`;
+                        gridRow = '5 / 6';
                     }
+
+                    return (
+                        <Box
+                            key={cam.name}
+                            onClick={() => handleCameraClick(cam.name)}
+                            sx={{
+                                gridColumn,
+                                gridRow,
+                                width: '100%',
+                                height: '100%',
+                                background: '#000',
+                                border: '1px solid #333',
+                                m: 0,
+                                p: 0,
+                                display: 'flex',
+                                alignItems: 'stretch',
+                                justifyContent: 'stretch',
+                                minWidth: 0,
+                                minHeight: 0,
+                                overflow: 'hidden'
+                            }}
+                        >
+                            <CameraPlayer wsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
+                        </Box>
+                    );
                 })}
             </Box>
 
