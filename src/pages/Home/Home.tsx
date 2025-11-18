@@ -156,12 +156,12 @@ const Home: React.FC = () => {
         }
     }, [status.incomingCall]);
 
-    // Parar som quando a chamada é atendida (phone-call.mp3)
+    // Parar som quando a chamada é confirmada/atendida (phone-call.mp3)
     React.useEffect(() => {
-        console.log(`[Audio Debug] isOutgoingCall: ${isOutgoingCall}, status.inCall: ${status.inCall}`);
+        console.log(`[Audio Debug] callConfirmed: ${status.callConfirmed}, isOutgoingCall: ${isOutgoingCall}`);
 
-        // Para o som quando a chamada é atendida
-        if (status.inCall && phoneCallRef.current) {
+        // Para o som quando a chamada é confirmada (atendida)
+        if (status.callConfirmed && phoneCallRef.current) {
             console.log('[Audio] Parando phone-call.mp3 - chamada atendida');
             phoneCallRef.current.pause();
             phoneCallRef.current.currentTime = 0;
@@ -171,7 +171,7 @@ const Home: React.FC = () => {
                 setIsOutgoingCall(false);
             }
         }
-    }, [status.inCall, isOutgoingCall]);
+    }, [status.callConfirmed, isOutgoingCall]);
 
     if (loading) {
         return (

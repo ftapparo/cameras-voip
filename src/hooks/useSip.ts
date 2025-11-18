@@ -15,6 +15,7 @@ export interface SipStatus {
     extension?: string;
     inCall: boolean;
     callStatus: string;
+    callConfirmed?: boolean;
     incomingCall?: {
         callerExtension: string;
         session: any;
@@ -26,7 +27,8 @@ export const useSip = () => {
         isConnected: false,
         isRegistered: false,
         inCall: false,
-        callStatus: 'Parado'
+        callStatus: 'Parado',
+        callConfirmed: false
     });
 
     const uaRef = useRef<any>(null);
@@ -236,7 +238,8 @@ export const useSip = () => {
         setStatus(prev => ({
             ...prev,
             inCall: true,
-            callStatus: 'Chamando...'
+            callStatus: 'Chamando...',
+            callConfirmed: false
         }));
 
         const session = uaRef.current.call(destination, {
@@ -250,14 +253,15 @@ export const useSip = () => {
         attachRemoteAudio(session);
 
         session.on('confirmed', () => {
-            setStatus(prev => ({ ...prev, callStatus: 'Em chamada' }));
+            setStatus(prev => ({ ...prev, callStatus: 'Em chamada', callConfirmed: true }));
         });
 
         session.on('ended', () => {
             setStatus(prev => ({
                 ...prev,
                 inCall: false,
-                callStatus: 'Chamada encerrada'
+                callStatus: 'Chamada encerrada',
+                callConfirmed: false
             }));
         });
 
@@ -265,7 +269,8 @@ export const useSip = () => {
             setStatus(prev => ({
                 ...prev,
                 inCall: false,
-                callStatus: 'Chamada falhou: ' + e.cause
+                callStatus: 'Chamada falhou: ' + e.cause,
+                callConfirmed: false
             }));
         });
     };
