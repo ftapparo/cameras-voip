@@ -59,7 +59,7 @@ const Home: React.FC = () => {
         if (visibleCount < cameras.length) {
             const timer = setTimeout(() => {
                 setVisibleCount(visibleCount + 1);
-            }, 250); // Aumentado para 800ms para dar mais tempo entre câmeras
+            }, 500);
             return () => clearTimeout(timer);
         }
     }, [visibleCount, cameras.length]);
