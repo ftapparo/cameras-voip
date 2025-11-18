@@ -95,6 +95,13 @@ const Home: React.FC = () => {
 
         if (currentCamera?.extension) {
             console.log(`Iniciando chamada para extension: ${currentCamera.extension}`);
+
+            // Toca o som ANTES de fazer a chamada
+            if (phoneCallRef.current) {
+                phoneCallRef.current.loop = true;
+                phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
+            }
+
             setIsOutgoingCall(true);
             makeCall(currentCamera.extension);
         } else {
@@ -149,27 +156,22 @@ const Home: React.FC = () => {
         }
     }, [status.incomingCall]);
 
-    // Tocar som quando fazer chamada sainte (phone-call.mp3)
-    // Toca quando isOutgoingCall está ativo e para quando a chamada é atendida (status.inCall)
+    // Parar som quando a chamada é atendida (phone-call.mp3)
     React.useEffect(() => {
-        console.log(`[Audio Debug] isOutgoingCall: ${isOutgoingCall}, status.inCall: ${status.inCall}, phoneCallRef: ${!!phoneCallRef.current}`);
+        console.log(`[Audio Debug] isOutgoingCall: ${isOutgoingCall}, status.inCall: ${status.inCall}`);
 
-        if (isOutgoingCall && !status.inCall && phoneCallRef.current) {
-            console.log('[Audio] Tocando phone-call.mp3');
-            phoneCallRef.current.loop = true;
-            phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
-        } else if (phoneCallRef.current) {
-            console.log('[Audio] Parando phone-call.mp3');
+        // Para o som quando a chamada é atendida
+        if (status.inCall && phoneCallRef.current) {
+            console.log('[Audio] Parando phone-call.mp3 - chamada atendida');
             phoneCallRef.current.pause();
             phoneCallRef.current.currentTime = 0;
-        }
 
-        // Para a chamada sainte quando atende
-        if (status.inCall && isOutgoingCall) {
-            console.log('[Audio] Chamada atendida, limpando isOutgoingCall');
-            setIsOutgoingCall(false);
+            // Limpa o estado de outgoing call
+            if (isOutgoingCall) {
+                setIsOutgoingCall(false);
+            }
         }
-    }, [isOutgoingCall, status.inCall]);
+    }, [status.inCall, isOutgoingCall]);
 
     if (loading) {
         return (
