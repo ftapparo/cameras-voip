@@ -1,6 +1,6 @@
 {
-    "name": "Cameras VoIP - Portaria",
-    "short_name": "Portaria VoIP",
+    "name": "Portaria VoIP",
+    "short_name": "Portaria",
     "description": "Aplicação de monitoramento com VoIP para portaria",
     "start_url": "/",
     "scope": "/",
