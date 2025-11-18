@@ -22,16 +22,13 @@ const Home: React.FC = () => {
         console.log('[Home] remoteAudioRef:', remoteAudioRef);
         console.log('[Home] remoteAudioRef.current:', remoteAudioRef?.current);
 
-        // Criar elemento audio se não existir
-        if (!remoteAudioRef?.current) {
-            console.warn('[Home] Criando elemento audio manualmente');
-            const audioElement = new Audio();
-            audioElement.autoplay = true;
-            remoteAudioRef.current = audioElement;
+        // Garantir que o elemento audio está no DOM
+        const audioElement = remoteAudioRef?.current;
+        if (audioElement && !audioElement.parentElement) {
+            console.warn('[Home] Adicionando elemento audio ao DOM');
+            document.body.appendChild(audioElement);
         }
-    }, [remoteAudioRef]);
-
-    // Estado para armazenar as câmeras carregadas da API
+    }, [remoteAudioRef]);    // Estado para armazenar as câmeras carregadas da API
     const [cameras, setCameras] = React.useState<Camera[]>([]);
     const [loading, setLoading] = React.useState(true);
 
