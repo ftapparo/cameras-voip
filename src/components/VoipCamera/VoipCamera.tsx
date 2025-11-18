@@ -25,7 +25,6 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
     const destroyFnRef = useRef<(() => void) | null>(null);
-    const [interfoneAtivo, setInterfoneAtivo] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
@@ -427,12 +426,10 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             ) : hasVoip ? (
                 // Comportamento normal - botão circular Ligar/Desligar
                 <IconButton
-                    onClick={() => {
+                    onClick={(e) => {
+                        e.stopPropagation();
                         if (onClick) {
                             onClick();
-                        } else {
-                            setInterfoneAtivo(!interfoneAtivo);
-                            console.log(`Interfone ${!interfoneAtivo ? 'ativado' : 'desativado'}`);
                         }
                     }}
                     sx={{
@@ -441,11 +438,11 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                         right: 16,
                         width: '64px',
                         height: '64px',
-                        backgroundColor: interfoneAtivo ? '#f44336' : '#4CAF50',
+                        backgroundColor: '#4CAF50',
                         color: 'white',
                         zIndex: 10,
                         '&:hover': {
-                            backgroundColor: interfoneAtivo ? '#d32f2f' : '#388e3c',
+                            backgroundColor: '#388e3c',
                         },
                         boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)'
                     }}
