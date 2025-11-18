@@ -10,27 +10,10 @@ export default defineConfig({
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,webp}'],
-        globIgnores: ['**/*.mp3', '**/stream/**'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'https-calls',
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 5 * 60 // 5 minutos
-              }
-            }
-          },
-          {
-            urlPattern: /^wss?:\/\//,
-            handler: 'NetworkOnly',
-            options: {
-              cacheName: 'websocket'
-            }
-          }
-        ]
+        globIgnores: ['**/*.mp3', '**/stream/**', '**/api/**'],
+        clientsClaim: true,
+        skipWaiting: true,
+        runtimeCaching: []
       },
       manifest: {
         name: 'Cameras VoIP - Portaria',
