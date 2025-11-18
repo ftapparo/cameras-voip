@@ -72,6 +72,12 @@ const Home: React.FC = () => {
 
     // Função para lidar com o clique em uma câmera pequena
     const handleCameraClick = (cameraName: string) => {
+        // Bloqueia troca de câmera durante chamadas
+        if (status.incomingCall || status.inCall || isOutgoingCall) {
+            console.log('Troca de câmera bloqueada durante chamada');
+            return;
+        }
+
         const highDefUrl = getCameraUrl(cameraName, true);
 
         console.log(`Câmera ${cameraName} clicada. URL HD: ${highDefUrl}`);
@@ -187,11 +193,13 @@ const Home: React.FC = () => {
                         gridColumn: '1 / 3',
                         gridRow: '1 / 3',
                         background: '#000',
-                        border: status.incomingCall
-                            ? '4px solid #4caf50'
+                        border: '1px solid #333',
+                        outline: status.incomingCall
+                            ? 'none'
                             : (status.inCall || activeCallExtension)
-                                ? '4px solid #f44336'
-                                : '1px solid #333',
+                                ? '3px solid #f44336'
+                                : 'none',
+                        outlineOffset: '-3px',
                         display: 'flex',
                         alignItems: 'stretch',
                         justifyContent: 'stretch',
@@ -200,13 +208,17 @@ const Home: React.FC = () => {
                         overflow: 'hidden',
                         animation: status.incomingCall ? 'blink-border 1s infinite' : 'none',
                         '@keyframes blink-border': {
-                            '0%, 100%': {
-                                borderColor: '#4caf50',
-                                boxShadow: '0 0 20px #4caf50'
+                            '0%': {
+                                outline: '3px solid rgba(244, 67, 54, 0.3)',
+                                outlineOffset: '-3px'
                             },
                             '50%': {
-                                borderColor: '#2e7d32',
-                                boxShadow: '0 0 10px #2e7d32'
+                                outline: '3px solid rgba(244, 67, 54, 1)',
+                                outlineOffset: '-3px'
+                            },
+                            '100%': {
+                                outline: '3px solid rgba(244, 67, 54, 0.3)',
+                                outlineOffset: '-3px'
                             }
                         }
                     }}
