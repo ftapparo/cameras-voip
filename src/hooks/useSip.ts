@@ -33,7 +33,7 @@ export const useSip = () => {
 
     const uaRef = useRef<any>(null);
     const sessionRef = useRef<any>(null);
-    const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+    const remoteAudioRef = useRef<HTMLAudioElement>(null);
     const [config, setConfig] = useState<SipConfig | null>(null);
     const registrationTimeoutRef = useRef<number | null>(null);
     const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);

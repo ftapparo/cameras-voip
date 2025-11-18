@@ -21,6 +21,14 @@ const Home: React.FC = () => {
     React.useEffect(() => {
         console.log('[Home] remoteAudioRef:', remoteAudioRef);
         console.log('[Home] remoteAudioRef.current:', remoteAudioRef?.current);
+
+        // Criar elemento audio se não existir
+        if (!remoteAudioRef?.current) {
+            console.warn('[Home] Criando elemento audio manualmente');
+            const audioElement = new Audio();
+            audioElement.autoplay = true;
+            remoteAudioRef.current = audioElement;
+        }
     }, [remoteAudioRef]);
 
     // Estado para armazenar as câmeras carregadas da API
