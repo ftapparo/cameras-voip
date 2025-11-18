@@ -152,16 +152,21 @@ const Home: React.FC = () => {
     // Tocar som quando fazer chamada sainte (phone-call.mp3)
     // Toca quando isOutgoingCall está ativo e para quando a chamada é atendida (status.inCall)
     React.useEffect(() => {
+        console.log(`[Audio Debug] isOutgoingCall: ${isOutgoingCall}, status.inCall: ${status.inCall}, phoneCallRef: ${!!phoneCallRef.current}`);
+
         if (isOutgoingCall && !status.inCall && phoneCallRef.current) {
+            console.log('[Audio] Tocando phone-call.mp3');
             phoneCallRef.current.loop = true;
             phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
         } else if (phoneCallRef.current) {
+            console.log('[Audio] Parando phone-call.mp3');
             phoneCallRef.current.pause();
             phoneCallRef.current.currentTime = 0;
         }
 
         // Para a chamada sainte quando atende
         if (status.inCall && isOutgoingCall) {
+            console.log('[Audio] Chamada atendida, limpando isOutgoingCall');
             setIsOutgoingCall(false);
         }
     }, [isOutgoingCall, status.inCall]);
