@@ -76,9 +76,16 @@ export const useSip = () => {
     const attachRemoteAudio = (session: any) => {
         session.connection.addEventListener('track', (event: any) => {
             const [stream] = event.streams;
+            console.log('[Audio] Track recebido:', event.track.kind);
             if (remoteAudioRef.current) {
                 remoteAudioRef.current.srcObject = stream;
-                remoteAudioRef.current.play().catch(() => { });
+                remoteAudioRef.current.volume = 1; // Volume máximo
+                remoteAudioRef.current.play().catch((err) => {
+                    console.error('[Audio] Erro ao reproduzir:', err);
+                });
+                console.log('[Audio] Stream configurado e iniciando reprodução');
+            } else {
+                console.warn('[Audio] remoteAudioRef não está disponível');
             }
         });
     };

@@ -413,7 +413,7 @@ const Home: React.FC = () => {
             </Box>
 
             {/* Áudio remoto SIP */}
-            <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
+            <audio ref={remoteAudioRef} autoPlay playsInline muted={false} style={{ display: 'none' }} />
 
             {/* Sons de chamada */}
             <audio ref={phoneRingRef} src="/phone-ring.mp3" style={{ display: 'none' }} />
