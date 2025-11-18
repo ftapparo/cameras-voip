@@ -10,6 +10,7 @@ export default defineConfig({
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,webp}'],
+        globIgnores: ['**/*.mp3', '**/stream/**'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\//,
@@ -20,6 +21,13 @@ export default defineConfig({
                 maxEntries: 200,
                 maxAgeSeconds: 5 * 60 // 5 minutos
               }
+            }
+          },
+          {
+            urlPattern: /^wss?:\/\//,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'websocket'
             }
           }
         ]
