@@ -4,6 +4,7 @@ import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
 import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
 import { IncomingCall } from '../../components/IncomingCall/IncomingCall';
 import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
+import { InstallPWA } from '../../components/InstallPWA/InstallPWA';
 import { useSip } from '../../hooks/useSip';
 import { Box, Typography } from '@mui/material';
 
@@ -418,6 +419,9 @@ const Home: React.FC = () => {
             {/* Sons de chamada */}
             <audio ref={phoneRingRef} src="/phone-ring.mp3" style={{ display: 'none' }} />
             <audio ref={phoneCallRef} src="/phone-call.mp3" style={{ display: 'none' }} />
+
+            {/* Botão de Instalação PWA */}
+            <InstallPWA />
 
             {/* Barra de Status SIP */}
             <SipStatusBar
