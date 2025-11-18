@@ -3,6 +3,12 @@ import { useState, useEffect } from 'react';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PhoneIcon from '@mui/icons-material/Phone';
 import PhoneDisabledIcon from '@mui/icons-material/PhoneDisabled';
+import DownloadIcon from '@mui/icons-material/Download';
+
+interface BeforeInstallPromptEvent extends Event {
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 interface SipConfig {
     websocket: string;
@@ -22,6 +28,8 @@ const SIP_CONFIG_KEY = 'sip_config';
 
 export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSave }: SipStatusBarProps) => {
     const [configOpen, setConfigOpen] = useState(false);
+    const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+    const [showInstallButton, setShowInstallButton] = useState(false);
 
     // Carrega configuração do localStorage
     const loadSavedConfig = (): SipConfig => {
@@ -53,12 +61,54 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
         }
     }, [onConfigSave]);
 
+    // Gerenciar PWA install prompt
+    useEffect(() => {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+        if (isStandalone) {
+            return;
+        }
+
+        const handleBeforeInstallPrompt = (e: Event) => {
+            e.preventDefault();
+            const promptEvent = e as BeforeInstallPromptEvent;
+            setDeferredPrompt(promptEvent);
+            setShowInstallButton(true);
+        };
+
+        const handleAppInstalled = () => {
+            setShowInstallButton(false);
+            setDeferredPrompt(null);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.addEventListener('appinstalled', handleAppInstalled);
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
+        };
+    }, []);
+
     const handleSave = () => {
         // Salva no localStorage
         localStorage.setItem(SIP_CONFIG_KEY, JSON.stringify(formData));
         console.log('Configuração SIP salva no localStorage');
         onConfigSave(formData);
         setConfigOpen(false);
+    };
+
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+
+        try {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`App install ${outcome}`);
+            setDeferredPrompt(null);
+            setShowInstallButton(false);
+        } catch (error) {
+            console.error('Erro ao instalar:', error);
+        }
     };
 
     const getStatusColor = () => {
@@ -107,6 +157,24 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                         }}
                     />
                 </Box>
+
+                {/* Botão de Instalação (centro) */}
+                {showInstallButton && (
+                    <Button
+                        startIcon={<DownloadIcon />}
+                        onClick={handleInstallClick}
+                        sx={{
+                            color: 'white',
+                            textTransform: 'none',
+                            fontSize: '0.9rem',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }}
+                    >
+                        Clique para instalar
+                    </Button>
+                )}
 
                 {/* Configurações */}
                 <IconButton
