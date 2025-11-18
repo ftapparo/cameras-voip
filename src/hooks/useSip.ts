@@ -40,37 +40,68 @@ export const useSip = () => {
 
     // Verifica se há microfone disponível e pede permissão
     useEffect(() => {
-        const checkMicrophone = async () => {
+        const requestPermissions = async () => {
             try {
-                // Verifica se há dispositivos de áudio disponíveis
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                console.log('%c🔐 SOLICITANDO PERMISSÕES DE SEGURANÇA 🔐', 'background: #ff9800; color: white; font-size: 14px; font-weight: bold; padding: 10px;');
 
-                if (audioInputs.length > 0) {
-                    console.log(`[Microfone] ${audioInputs.length} microfone(s) detectado(s)`);
+                // Tenta solicitar câmera + áudio primeiro
+                try {
+                    console.log('[Permissões] Solicitando Câmera + Áudio + Microfone...');
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+                    console.log('%c✅ PERMISSÕES CONCEDIDAS: Câmera + Áudio + Microfone', 'color: #4CAF50; font-weight: bold; font-size: 12px;');
+                    setHasMicrophone(true);
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                } catch (cameraError: any) {
+                    console.warn(`[Permissões] Câmera falhou (${cameraError.name}), tentando apenas áudio...`);
 
-                    // Pede permissão para usar o microfone
+                    // Se câmera falhar, tenta apenas áudio
                     try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        console.log('[Microfone] Permissão concedida');
+                        console.log('[Permissões] Solicitando Áudio + Microfone...');
+                        const audioStream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: true
+                            }
+                        });
+                        console.log('%c✅ PERMISSÕES CONCEDIDAS: Áudio + Microfone', 'color: #4CAF50; font-weight: bold; font-size: 12px;');
                         setHasMicrophone(true);
-                        // Para o stream imediatamente, só queríamos verificar a permissão
-                        stream.getTracks().forEach(track => track.stop());
-                    } catch (permissionError) {
-                        console.warn('[Microfone] Permissão negada ou erro:', permissionError);
+                        audioStream.getTracks().forEach(track => track.stop());
+                        return;
+                    } catch (audioError: any) {
+                        console.error('%c❌ PERMISSÕES NEGADAS', 'background: #f44336; color: white; font-weight: bold; font-size: 12px; padding: 5px;');
+                        console.error(`Erro: ${audioError.name} - ${audioError.message}`);
+
+                        // Mostra instruções detalhadas
+                        console.log('%c📋 COMO RESOLVER ESTE PROBLEMA:', 'background: #2196F3; color: white; font-weight: bold; font-size: 12px; padding: 5px;');
+                        console.log('%c1. Clique no ícone de cadeado na barra de endereço', 'color: #2196F3; font-size: 11px;');
+                        console.log('%c2. Procure por "Câmera" e "Microfone"', 'color: #2196F3; font-size: 11px;');
+                        console.log('%c3. Altere para "Permitir" em ambas', 'color: #2196F3; font-size: 11px;');
+                        console.log('%c4. Recarregue a página (F5)', 'color: #2196F3; font-size: 11px;');
+                        console.log('%c\n⚠️  SE AINDA NÃO FUNCIONAR:', 'background: #ff9800; color: white; font-weight: bold; font-size: 11px; padding: 3px;');
+                        console.log('%c• Use HTTPS (https://192.168.0.250:5173)', 'color: #ff9800; font-size: 10px;');
+                        console.log('%c• Não use HTTP localhost', 'color: #ff9800; font-size: 10px;');
+                        console.log('%c• Algumas permissões requerem conexão segura', 'color: #ff9800; font-size: 10px;');
+
                         setHasMicrophone(false);
                     }
-                } else {
-                    console.log('[Microfone] Nenhum microfone detectado');
-                    setHasMicrophone(false);
                 }
             } catch (error) {
-                console.error('[Microfone] Erro ao verificar dispositivos:', error);
+                console.error('[Permissões] Erro geral:', error);
                 setHasMicrophone(false);
             }
         };
 
-        checkMicrophone();
+        // Executa imediatamente
+        requestPermissions();
     }, []);
 
     const attachRemoteAudio = (session: any) => {
