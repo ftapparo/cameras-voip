@@ -17,6 +17,12 @@ const Home: React.FC = () => {
     // Hook SIP
     const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip();
 
+    // Debug: log quando o ref é criado
+    React.useEffect(() => {
+        console.log('[Home] remoteAudioRef:', remoteAudioRef);
+        console.log('[Home] remoteAudioRef.current:', remoteAudioRef?.current);
+    }, [remoteAudioRef]);
+
     // Estado para armazenar as câmeras carregadas da API
     const [cameras, setCameras] = React.useState<Camera[]>([]);
     const [loading, setLoading] = React.useState(true);
