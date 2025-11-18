@@ -1,0 +1,12 @@
+{
+  "name": "portaria-voip-camera-electron",
+  "version": "1.0.0",
+  "main": "electron-main.js",
+  "scripts": {
+    "electron:start": "set NODE_ENV=development&& electron .",
+    "electron:build": "vite build && electron ."
+  },
+  "devDependencies": {
+    "electron": "^29.0.0"
+  }
+}

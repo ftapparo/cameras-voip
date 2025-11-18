@@ -36,8 +36,7 @@ const Home: React.FC = () => {
     React.useEffect(() => {
         const fetchCameras = async () => {
             try {
-                //const response = await axios.get('https://rtsp.condominionovaresidence.com/api/v1/camera/list');
-                const response = await axios.get('http://localhost:2000/api/v1/camera/list');
+                const response = await axios.get('https://rtsp.condominionovaresidence.com/api/v1/camera/list');
                 // Limita para as 14 primeiras câmeras
                 setCameras(response.data.cameras.slice(0, 14));
                 setLoading(false);
@@ -102,8 +101,7 @@ const Home: React.FC = () => {
     const getCameraUrl = (cameraId: number, highDef = false) => {
         // highDef = true usa tipo 0 (alta definição), false usa tipo 1 (baixa)
         const type = highDef ? '0' : '1';
-        // return `wss://rtsp.condominionovaresidence.com/stream/${cameraId}/${type}`;
-        return `ws://localhost:2000/stream/${cameraId}/${type}`;
+        return `wss://rtsp.condominionovaresidence.com/stream/${cameraId}/${type}`;
     };
 
     // Função para lidar com o clique em uma câmera pequena

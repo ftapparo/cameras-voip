@@ -43,6 +43,31 @@ export default defineConfig([
 ])
 ```
 
+## Rodando como aplicativo desktop (Electron)
+
+1. Instale as dependências do projeto normalmente:
+   ```powershell
+   npm install
+   ```
+
+2. Instale as dependências do Electron:
+   ```powershell
+   npm install --save-dev electron
+   ```
+
+3. Para rodar em modo desenvolvimento (usando o Vite dev server):
+   ```powershell
+   npm run dev
+   npm run electron:start
+   ```
+
+4. Para rodar em modo produção (após build):
+   ```powershell
+   npm run build
+   npm run electron:build
+   ```
+
+O aplicativo será aberto em uma janela própria, sem necessidade de navegador.
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js

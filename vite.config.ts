@@ -62,5 +62,8 @@ export default defineConfig({
         manualChunks: undefined
       }
     }
+  },
+  server: {
+    allowedHosts: ['.local', '.condominionovaresidence.com']
   }
 });
