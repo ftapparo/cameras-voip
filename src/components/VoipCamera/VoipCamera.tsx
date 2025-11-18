@@ -1,10 +1,13 @@
 import { Box, Chip, CircularProgress } from '@mui/material';
 import { useRef, useEffect, useState } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
+import CallEndIcon from '@mui/icons-material/CallEnd';
 
 interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
     wsUrl?: string;
     onClick?: () => void;
+    isIncomingCall?: boolean;
+    onReject?: () => void;
 }
 
 interface PlayerWithDestroy {
@@ -13,7 +16,7 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, onClick, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, onReject, ...rest }: VoipCameraProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -311,29 +314,103 @@ export const VoipCamera = ({ wsUrl, onClick, ...rest }: VoipCameraProps) => {
                 </Box>
             )}
 
-            <Chip
-                icon={<PhoneIcon />}
-                label={interfoneAtivo ? 'Desligar' : 'Ligar'}
-                sx={{
+            {/* Botões de controle */}
+            {isIncomingCall ? (
+                // Chamada recebida - mostra botões Recusar e Atender
+                <Box sx={{
                     position: 'absolute',
-                    bottom: 16,
-                    right: 16,
-                    width: '180px',
-                    height: '48px',
-                    backgroundColor: interfoneAtivo ? '#f44336' : '#4CAF50',
-                    color: 'white',
-                    fontWeight: 'bold',
-                    fontSize: '1.1rem',
-                    zIndex: 10,
-                    '& .MuiChip-icon': {
+                    bottom: 20,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    gap: 3,
+                    zIndex: 10
+                }}>
+                    <Chip
+                        icon={<CallEndIcon />}
+                        label="RECUSAR"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onReject) onReject();
+                        }}
+                        sx={{
+                            width: '180px',
+                            height: '56px',
+                            backgroundColor: '#d32f2f',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '1.2rem',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase',
+                            '&:hover': {
+                                backgroundColor: '#b71c1c'
+                            },
+                            '& .MuiChip-icon': {
+                                color: 'white',
+                                fontSize: '1.6rem'
+                            },
+                            '& .MuiChip-label': {
+                                fontSize: '1.2rem',
+                                fontWeight: 'bold'
+                            }
+                        }}
+                    />
+                    <Chip
+                        icon={<PhoneIcon />}
+                        label="ATENDER"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onClick) onClick();
+                        }}
+                        sx={{
+                            width: '180px',
+                            height: '56px',
+                            backgroundColor: '#43a047',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '1.2rem',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase',
+                            '&:hover': {
+                                backgroundColor: '#2e7d32'
+                            },
+                            '& .MuiChip-icon': {
+                                color: 'white',
+                                fontSize: '1.6rem'
+                            },
+                            '& .MuiChip-label': {
+                                fontSize: '1.2rem',
+                                fontWeight: 'bold'
+                            }
+                        }}
+                    />
+                </Box>
+            ) : (
+                // Comportamento normal - botão Ligar/Desligar
+                <Chip
+                    icon={<PhoneIcon />}
+                    label={interfoneAtivo ? 'Desligar' : 'Ligar'}
+                    sx={{
+                        position: 'absolute',
+                        bottom: 16,
+                        right: 16,
+                        width: '180px',
+                        height: '48px',
+                        backgroundColor: interfoneAtivo ? '#f44336' : '#4CAF50',
                         color: 'white',
-                        fontSize: '1.5rem'
-                    },
-                    '& .MuiChip-label': {
-                        fontSize: '1.1rem'
-                    }
-                }}
-            />
+                        fontWeight: 'bold',
+                        fontSize: '1.1rem',
+                        zIndex: 10,
+                        '& .MuiChip-icon': {
+                            color: 'white',
+                            fontSize: '1.5rem'
+                        },
+                        '& .MuiChip-label': {
+                            fontSize: '1.1rem'
+                        }
+                    }}
+                />
+            )}
         </Box>
     );
 };

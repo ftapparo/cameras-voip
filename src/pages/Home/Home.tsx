@@ -189,11 +189,13 @@ const Home: React.FC = () => {
                     {status.incomingCall ? (
                         // Há uma chamada recebida
                         voipUrl ? (
-                            // Câmera identificada - mostra VoipCamera
+                            // Câmera identificada - mostra VoipCamera com botões Atender/Recusar
                             <VoipCamera
                                 key={voipKey}
                                 wsUrl={voipUrl}
                                 onClick={answerCall}
+                                isIncomingCall={true}
+                                onReject={hangup}
                             />
                         ) : (
                             // Ramal sem câmera - mostra IncomingCall
