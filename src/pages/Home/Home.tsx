@@ -339,20 +339,12 @@ const Home: React.FC = () => {
                         />
                     ) : voipUrl ? (
                         // Câmera selecionada manualmente (sem chamada)
-                        // Verifica se a câmera tem interfone (extension)
-                        cameras.find(c => c.id === voipCameraId)?.extension ? (
-                            <VoipCamera
-                                key={voipKey}
-                                wsUrl={voipUrl}
-                                onClick={handleOutgoingCall}
-                            />
-                        ) : (
-                            // Câmera sem interfone - apenas visualização
-                            <VoipCamera
-                                key={voipKey}
-                                wsUrl={voipUrl}
-                            />
-                        )
+                        <VoipCamera
+                            key={voipKey}
+                            wsUrl={voipUrl}
+                            onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
+                            hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
+                        />
                     ) : (
                         // Nenhuma atividade
                         <Typography variant="h6" color="white" sx={{ m: 'auto' }}>

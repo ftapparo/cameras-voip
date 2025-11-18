@@ -11,6 +11,7 @@ interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> 
     isOutgoingCall?: boolean;
     onReject?: () => void;
     onHangup?: () => void;
+    hasVoip?: boolean; // Indica se a câmera tem funcionalidade VoIP
 }
 
 interface PlayerWithDestroy {
@@ -19,7 +20,7 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, ...rest }: VoipCameraProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -257,10 +258,10 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 minWidth: 0,
                 minHeight: 0,
                 position: 'relative',
-                cursor: 'pointer',
+                cursor: hasVoip ? 'pointer' : 'default',
                 outline: isInCall
                     ? '3px solid #f44336'
-                    : (isHovering && !isIncomingCall && !isOutgoingCall ? '3px solid #4CAF50' : 'none'),
+                    : (isHovering && !isIncomingCall && !isOutgoingCall && hasVoip ? '3px solid #4CAF50' : 'none'),
                 outlineOffset: '-3px',
                 transition: 'outline 0.1s ease',
                 animation: (isOutgoingCall || isIncomingCall) ? 'blink-border 1s infinite' : 'none',
@@ -275,9 +276,11 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     objectFit: 'fill !important'
                 }
             }}
-            onMouseEnter={() => !isInCall && !isIncomingCall && !isOutgoingCall && setIsHovering(true)}
+            onMouseEnter={() => hasVoip && !isInCall && !isIncomingCall && !isOutgoingCall && setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
             onClick={() => {
+                if (!hasVoip) return; // Sem VoIP, não faz nada
+
                 // isIncomingCall: clica no canvas, atende a chamada
                 if (isIncomingCall) {
                     if (onClick) onClick();
@@ -327,7 +330,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             )}
 
             {/* Botões de controle */}
-            {isIncomingCall ? (
+            {hasVoip && isIncomingCall ? (
                 // Chamada recebida - mostra botões Recusar e Atender
                 <Box sx={{
                     position: 'absolute',
@@ -397,7 +400,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                         }}
                     />
                 </Box>
-            ) : isInCall || isOutgoingCall ? (
+            ) : hasVoip && (isInCall || isOutgoingCall) ? (
                 // Em chamada ativa ou chamada sainte - botão ENCERRAR circular vermelho
                 <IconButton
                     onClick={(e) => {
@@ -421,7 +424,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 >
                     <CallEndIcon sx={{ fontSize: '2rem' }} />
                 </IconButton>
-            ) : (
+            ) : hasVoip ? (
                 // Comportamento normal - botão circular Ligar/Desligar
                 <IconButton
                     onClick={() => {
@@ -449,7 +452,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 >
                     <PhoneIcon sx={{ fontSize: '2rem' }} />
                 </IconButton>
-            )}
+            ) : null}
         </Box>
     );
 };
