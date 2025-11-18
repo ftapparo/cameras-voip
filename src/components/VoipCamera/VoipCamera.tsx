@@ -4,6 +4,7 @@ import PhoneIcon from '@mui/icons-material/Phone';
 
 interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
     wsUrl?: string;
+    onClick?: () => void;
 }
 
 interface PlayerWithDestroy {
@@ -12,7 +13,7 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, ...rest }: VoipCameraProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -265,9 +266,15 @@ export const VoipCamera = ({ wsUrl, ...rest }: VoipCameraProps) => {
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
             onClick={() => {
-                setInterfoneAtivo(!interfoneAtivo);
-                console.log(`Interfone ${!interfoneAtivo ? 'ativado' : 'desativado'}`);
-                // TODO: Implementar lógica de chamada VOIP
+                // Se há onClick (para atender chamada), executa-o
+                if (onClick) {
+                    onClick();
+                } else {
+                    // Comportamento normal de ativar/desativar interfone
+                    setInterfoneAtivo(!interfoneAtivo);
+                    console.log(`Interfone ${!interfoneAtivo ? 'ativado' : 'desativado'}`);
+                    // TODO: Implementar lógica de chamada VOIP
+                }
             }}
         >
             <canvas

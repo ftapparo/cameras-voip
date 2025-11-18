@@ -15,6 +15,10 @@ export interface SipStatus {
     extension?: string;
     inCall: boolean;
     callStatus: string;
+    incomingCall?: {
+        callerExtension: string;
+        session: any;
+    };
 }
 
 export const useSip = () => {
@@ -29,6 +33,7 @@ export const useSip = () => {
     const sessionRef = useRef<any>(null);
     const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
     const [config, setConfig] = useState<SipConfig | null>(null);
+    const registrationTimeoutRef = useRef<number | null>(null);
 
     const attachRemoteAudio = (session: any) => {
         session.connection.addEventListener('track', (event: any) => {
@@ -47,6 +52,12 @@ export const useSip = () => {
             uaRef.current = null;
         }
 
+        // Limpa timeout anterior se existir
+        if (registrationTimeoutRef.current) {
+            clearTimeout(registrationTimeoutRef.current);
+            registrationTimeoutRef.current = null;
+        }
+
         const socket = new JsSIP.WebSocketInterface(sipConfig.websocket);
 
         const ua = new JsSIP.UA({
@@ -62,9 +73,30 @@ export const useSip = () => {
                 isConnected: true,
                 callStatus: 'Conectado ao servidor SIP'
             }));
+
+            // Define timeout de 10 segundos para registro
+            registrationTimeoutRef.current = window.setTimeout(() => {
+                if (!uaRef.current?.isRegistered()) {
+                    setStatus(prev => ({
+                        ...prev,
+                        isConnected: false,
+                        isRegistered: false,
+                        callStatus: 'Erro: Tempo de registro expirado. Verifique as credenciais.'
+                    }));
+                    if (uaRef.current) {
+                        uaRef.current.stop();
+                    }
+                }
+            }, 10000);
         });
 
         ua.on('registered', () => {
+            // Limpa o timeout se registrado com sucesso
+            if (registrationTimeoutRef.current) {
+                clearTimeout(registrationTimeoutRef.current);
+                registrationTimeoutRef.current = null;
+            }
+
             setStatus(prev => ({
                 ...prev,
                 isRegistered: true,
@@ -74,6 +106,11 @@ export const useSip = () => {
         });
 
         ua.on('disconnected', () => {
+            if (registrationTimeoutRef.current) {
+                clearTimeout(registrationTimeoutRef.current);
+                registrationTimeoutRef.current = null;
+            }
+
             setStatus(prev => ({
                 ...prev,
                 isConnected: false,
@@ -84,6 +121,11 @@ export const useSip = () => {
         });
 
         ua.on('registrationFailed', (e: any) => {
+            if (registrationTimeoutRef.current) {
+                clearTimeout(registrationTimeoutRef.current);
+                registrationTimeoutRef.current = null;
+            }
+
             setStatus(prev => ({
                 ...prev,
                 isRegistered: false,
@@ -96,24 +138,27 @@ export const useSip = () => {
             const session = data.session;
 
             if (data.originator === 'remote') {
+                // Extrai o ramal do chamador
+                const remoteIdentity = session.remote_identity.uri.user;
+
                 setStatus(prev => ({
                     ...prev,
-                    inCall: true,
-                    callStatus: 'Chamada recebida'
+                    callStatus: 'Chamada recebida',
+                    incomingCall: {
+                        callerExtension: remoteIdentity,
+                        session: session
+                    }
                 }));
 
-                session.answer({
-                    mediaConstraints: { audio: false, video: false },
-                });
-
+                // NÃO atende automaticamente - aguarda o usuário clicar
                 sessionRef.current = session;
-                attachRemoteAudio(session);
 
                 session.on('ended', () => {
                     setStatus(prev => ({
                         ...prev,
                         inCall: false,
-                        callStatus: 'Chamada encerrada'
+                        callStatus: 'Chamada encerrada',
+                        incomingCall: undefined
                     }));
                 });
 
@@ -121,7 +166,8 @@ export const useSip = () => {
                     setStatus(prev => ({
                         ...prev,
                         inCall: false,
-                        callStatus: 'Chamada falhou'
+                        callStatus: 'Chamada falhou',
+                        incomingCall: undefined
                     }));
                 });
             }
@@ -197,8 +243,28 @@ export const useSip = () => {
         setStatus(prev => ({
             ...prev,
             inCall: false,
-            callStatus: 'Desligado'
+            callStatus: 'Desligado',
+            incomingCall: undefined
         }));
+    };
+
+    const answerCall = () => {
+        if (status.incomingCall?.session) {
+            const session = status.incomingCall.session;
+
+            session.answer({
+                mediaConstraints: { audio: false, video: false },
+            });
+
+            attachRemoteAudio(session);
+
+            setStatus(prev => ({
+                ...prev,
+                inCall: true,
+                callStatus: 'Em chamada',
+                incomingCall: undefined
+            }));
+        }
     };
 
     return {
@@ -206,6 +272,7 @@ export const useSip = () => {
         remoteAudioRef,
         connect: setConfig,
         makeCall,
-        hangup
+        hangup,
+        answerCall
     };
 };

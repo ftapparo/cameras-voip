@@ -2,6 +2,7 @@ import React from 'react';
 import axios from 'axios';
 import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
 import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
+import { IncomingCall } from '../../components/IncomingCall/IncomingCall';
 import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
 import { useSip } from '../../hooks/useSip';
 import { Box, Typography } from '@mui/material';
@@ -14,7 +15,7 @@ interface Camera {
 
 const Home: React.FC = () => {
     // Hook SIP
-    const { status, remoteAudioRef, connect } = useSip();
+    const { status, remoteAudioRef, connect, answerCall } = useSip();
 
     // Estado para armazenar as câmeras carregadas da API
     const [cameras, setCameras] = React.useState<Camera[]>([]);
@@ -71,6 +72,26 @@ const Home: React.FC = () => {
         setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
     };
 
+    // Detectar chamadas recebidas e carregar câmera automaticamente se disponível
+    React.useEffect(() => {
+        if (status.incomingCall) {
+            const callerExtension = status.incomingCall.callerExtension;
+
+            // Verifica se o ramal corresponde a uma câmera
+            const camera = cameras.find(cam => cam.extension === callerExtension);
+
+            if (camera) {
+                // Carrega a câmera em alta definição
+                const highDefUrl = getCameraUrl(camera.name, true);
+                setVoipUrl(highDefUrl);
+                setVoipKey(prev => prev + 1);
+            } else {
+                // Limpa a URL para mostrar o componente IncomingCall
+                setVoipUrl(undefined);
+            }
+        }
+    }, [status.incomingCall, cameras]);
+
     if (loading) {
         return (
             <Box sx={{ width: '100vw', height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -98,20 +119,52 @@ const Home: React.FC = () => {
                         gridColumn: '1 / 3',
                         gridRow: '1 / 3',
                         background: '#000',
-                        border: '1px solid #333',
+                        border: status.incomingCall ? '4px solid #4caf50' : '1px solid #333',
                         display: 'flex',
                         alignItems: 'stretch',
                         justifyContent: 'stretch',
                         minWidth: 0,
                         minHeight: 0,
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        animation: status.incomingCall ? 'blink-border 1s infinite' : 'none',
+                        '@keyframes blink-border': {
+                            '0%, 100%': {
+                                borderColor: '#4caf50',
+                                boxShadow: '0 0 20px #4caf50'
+                            },
+                            '50%': {
+                                borderColor: '#2e7d32',
+                                boxShadow: '0 0 10px #2e7d32'
+                            }
+                        }
                     }}
                 >
-                    {voipUrl ?
-                        <VoipCamera key={voipKey} wsUrl={voipUrl || ''} />
-                        :
-                        <Typography variant="h6" color="white" sx={{ m: 'auto' }}>Clique em uma câmera para ativar o interfone</Typography>
-                    }
+                    {status.incomingCall ? (
+                        // Há uma chamada recebida
+                        voipUrl ? (
+                            // Câmera identificada - mostra VoipCamera
+                            <VoipCamera
+                                key={voipKey}
+                                wsUrl={voipUrl}
+                                onClick={answerCall}
+                            />
+                        ) : (
+                            // Ramal sem câmera - mostra IncomingCall
+                            <IncomingCall
+                                callerExtension={status.incomingCall.callerExtension}
+                                description={cameras.find(c => c.extension === status.incomingCall?.callerExtension)?.description}
+                                onAnswer={answerCall}
+                            />
+                        )
+                    ) : voipUrl ? (
+                        // Chamada ativa ou câmera selecionada manualmente
+                        <VoipCamera key={voipKey} wsUrl={voipUrl} />
+                    ) : (
+                        // Nenhuma atividade
+                        <Typography variant="h6" color="white" sx={{ m: 'auto' }}>
+                            Clique em uma câmera para ativar o interfone
+                        </Typography>
+                    )}
                 </Box>
 
                 {/* Câmeras 1-12 distribuídas corretamente */}
