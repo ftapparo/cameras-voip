@@ -8,7 +8,7 @@ import { useSip } from '../../hooks/useSip';
 import { Box, Typography } from '@mui/material';
 
 interface Camera {
-    name: string;
+    id: number;
     description: string;
     extension: string;
 }
@@ -64,23 +64,23 @@ const Home: React.FC = () => {
         }
     }, [visibleCount, cameras.length]);
 
-    const getCameraUrl = (cameraName: string, highDef = false) => {
+    const getCameraUrl = (cameraId: number, highDef = false) => {
         // highDef = true usa tipo 0 (alta definição), false usa tipo 1 (baixa)
         const type = highDef ? '0' : '1';
-        return `wss://rtsp.condominionovaresidence.com/stream/${cameraName}/${type}`;
+        return `wss://rtsp.condominionovaresidence.com/stream/${cameraId}/${type}`;
     };
 
     // Função para lidar com o clique em uma câmera pequena
-    const handleCameraClick = (cameraName: string) => {
+    const handleCameraClick = (cameraId: number) => {
         // Bloqueia troca de câmera durante chamadas
         if (status.incomingCall || status.inCall || isOutgoingCall) {
             console.log('Troca de câmera bloqueada durante chamada');
             return;
         }
 
-        const highDefUrl = getCameraUrl(cameraName, true);
+        const highDefUrl = getCameraUrl(cameraId, true);
 
-        console.log(`Câmera ${cameraName} clicada. URL HD: ${highDefUrl}`);
+        console.log(`Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
 
         // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
         // Por enquanto, vou colocar sempre na área A
@@ -91,7 +91,7 @@ const Home: React.FC = () => {
     // Função para iniciar chamada sainte (outgoing call)
     const handleOutgoingCall = () => {
         // Encontra a câmera correspondente ao voipUrl atual
-        const currentCamera = cameras.find(cam => getCameraUrl(cam.name, true) === voipUrl);
+        const currentCamera = cameras.find(cam => getCameraUrl(cam.id, true) === voipUrl);
 
         if (currentCamera?.extension) {
             console.log(`Iniciando chamada para extension: ${currentCamera.extension}`);
@@ -119,7 +119,7 @@ const Home: React.FC = () => {
 
             if (camera) {
                 // Carrega a câmera em alta definição
-                const highDefUrl = getCameraUrl(camera.name, true);
+                const highDefUrl = getCameraUrl(camera.id, true);
 
                 // Só atualiza se for uma câmera diferente
                 if (voipUrl !== highDefUrl) {
@@ -331,8 +331,8 @@ const Home: React.FC = () => {
 
                     return (
                         <Box
-                            key={cam.name}
-                            onClick={() => handleCameraClick(cam.name)}
+                            key={cam.id}
+                            onClick={() => handleCameraClick(cam.id)}
                             sx={{
                                 gridColumn,
                                 gridRow,
@@ -350,7 +350,7 @@ const Home: React.FC = () => {
                                 overflow: 'hidden'
                             }}
                         >
-                            <CameraPlayer wsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
+                            <CameraPlayer wsUrl={getCameraUrl(cam.id)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
                         </Box>
                     );
                 })}
