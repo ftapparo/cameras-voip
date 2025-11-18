@@ -259,17 +259,17 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 position: 'relative',
                 cursor: 'pointer',
                 outline: isInCall
-                    ? '4px solid #f44336'
+                    ? '3px solid #f44336'
                     : isOutgoingCall
                         ? 'none'
-                        : (isHovering && !isIncomingCall ? '4px solid #4CAF50' : 'none'),
-                outlineOffset: '-4px',
+                        : (isHovering && !isIncomingCall ? '3px solid #4CAF50' : 'none'),
+                outlineOffset: '-3px',
                 transition: 'outline 0.1s ease',
                 animation: isOutgoingCall ? 'blink-border 1s infinite' : 'none',
                 '@keyframes blink-border': {
-                    '0%': { outline: '4px solid rgba(244, 67, 54, 0.3)' },
-                    '50%': { outline: '4px solid rgba(244, 67, 54, 1)' },
-                    '100%': { outline: '4px solid rgba(244, 67, 54, 0.3)' },
+                    '0%': { outline: '3px solid rgba(244, 67, 54, 0.3)', outlineOffset: '-3px' },
+                    '50%': { outline: '3px solid rgba(244, 67, 54, 1)', outlineOffset: '-3px' },
+                    '100%': { outline: '3px solid rgba(244, 67, 54, 0.3)', outlineOffset: '-3px' },
                 },
                 '& canvas': {
                     maxWidth: '100% !important',
