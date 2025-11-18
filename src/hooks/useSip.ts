@@ -42,22 +42,30 @@ export const useSip = () => {
     useEffect(() => {
         const checkMicrophone = async () => {
             try {
-                // Pede permissões de áudio (entrada e saída)
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        audio: { echoCancellation: true, noiseSuppression: true }
-                    });
-                    console.log('[Áudio] Permissões concedidas (entrada e saída)');
-                    setHasMicrophone(true);
-                    // Para o stream imediatamente, só queríamos verificar a permissão
-                    stream.getTracks().forEach(track => track.stop());
-                } catch (permissionError) {
-                    console.warn('[Áudio] Permissão negada:', permissionError);
-                    console.warn('[Áudio] Por favor, permita acesso a câmera, microfone e som nas configurações do navegador');
+                // Verifica se há dispositivos de áudio disponíveis
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+                if (audioInputs.length > 0) {
+                    console.log(`[Microfone] ${audioInputs.length} microfone(s) detectado(s)`);
+
+                    // Pede permissão para usar o microfone
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        console.log('[Microfone] Permissão concedida');
+                        setHasMicrophone(true);
+                        // Para o stream imediatamente, só queríamos verificar a permissão
+                        stream.getTracks().forEach(track => track.stop());
+                    } catch (permissionError) {
+                        console.warn('[Microfone] Permissão negada ou erro:', permissionError);
+                        setHasMicrophone(false);
+                    }
+                } else {
+                    console.log('[Microfone] Nenhum microfone detectado');
                     setHasMicrophone(false);
                 }
             } catch (error) {
-                console.error('[Áudio] Erro ao verificar permissões:', error);
+                console.error('[Microfone] Erro ao verificar dispositivos:', error);
                 setHasMicrophone(false);
             }
         };
