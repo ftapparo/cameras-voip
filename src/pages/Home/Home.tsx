@@ -15,7 +15,7 @@ interface Camera {
 
 const Home: React.FC = () => {
     // Hook SIP
-    const { status, remoteAudioRef, connect, answerCall, hangup } = useSip();
+    const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip();
 
     // Estado para armazenar as câmeras carregadas da API
     const [cameras, setCameras] = React.useState<Camera[]>([]);
@@ -84,9 +84,16 @@ const Home: React.FC = () => {
 
     // Função para iniciar chamada sainte (outgoing call)
     const handleOutgoingCall = () => {
-        console.log('Iniciando chamada sainte...');
-        setIsOutgoingCall(true);
-        // TODO: Implementar lógica de chamada VOIP usando makeCall do useSip
+        // Encontra a câmera correspondente ao voipUrl atual
+        const currentCamera = cameras.find(cam => getCameraUrl(cam.name, true) === voipUrl);
+
+        if (currentCamera?.extension) {
+            console.log(`Iniciando chamada para extension: ${currentCamera.extension}`);
+            setIsOutgoingCall(true);
+            makeCall(currentCamera.extension);
+        } else {
+            console.warn('Nenhuma câmera selecionada ou extension não disponível');
+        }
     };
 
     // Detectar chamadas recebidas e carregar câmera automaticamente se disponível
@@ -100,8 +107,12 @@ const Home: React.FC = () => {
             if (camera) {
                 // Carrega a câmera em alta definição
                 const highDefUrl = getCameraUrl(camera.name, true);
-                setVoipUrl(highDefUrl);
-                setVoipKey(prev => prev + 1);
+
+                // Só atualiza se for uma câmera diferente
+                if (voipUrl !== highDefUrl) {
+                    setVoipUrl(highDefUrl);
+                    setVoipKey(prev => prev + 1);
+                }
                 setActiveCallExtension(undefined); // Limpa chamada sem câmera se houver
             } else {
                 // Marca que há uma chamada de ramal sem câmera
@@ -119,7 +130,7 @@ const Home: React.FC = () => {
             setActiveCallExtension(undefined);
             setIsOutgoingCall(false);
         }
-    }, [status.incomingCall, status.inCall, cameras, activeCallExtension]);
+    }, [status.incomingCall, status.inCall, cameras, activeCallExtension, voipUrl]);
 
     // Tocar som quando receber chamada entrante (phone-ring.mp3)
     React.useEffect(() => {
@@ -235,6 +246,14 @@ const Home: React.FC = () => {
                             description={cameras.find(c => c.extension === activeCallExtension)?.description}
                             onAnswer={answerCall}
                             isInCall={true}
+                            onHangup={hangup}
+                        />
+                    ) : isOutgoingCall && voipUrl ? (
+                        // Chamada sainte em progresso (outgoing call)
+                        <VoipCamera
+                            key={voipKey}
+                            wsUrl={voipUrl}
+                            isOutgoingCall={true}
                             onHangup={hangup}
                         />
                     ) : voipUrl ? (

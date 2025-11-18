@@ -8,6 +8,7 @@ interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> 
     onClick?: () => void;
     isIncomingCall?: boolean;
     isInCall?: boolean;
+    isOutgoingCall?: boolean;
     onReject?: () => void;
     onHangup?: () => void;
 }
@@ -18,7 +19,7 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, onReject, onHangup, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, ...rest }: VoipCameraProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -259,16 +260,22 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 cursor: 'pointer',
                 outline: interfoneAtivo
                     ? '4px solid #f44336'
-                    : (isHovering ? '4px solid #4CAF50' : 'none'),
+                    : (isHovering && !isInCall && !isIncomingCall && !isOutgoingCall ? '4px solid #4CAF50' : 'none'),
                 outlineOffset: '-4px',
                 transition: 'outline 0.1s ease',
+                animation: isOutgoingCall ? 'blink-border 1s infinite' : 'none',
+                '@keyframes blink-border': {
+                    '0%': { outline: '4px solid rgba(244, 67, 54, 0.3)' },
+                    '50%': { outline: '4px solid rgba(244, 67, 54, 1)' },
+                    '100%': { outline: '4px solid rgba(244, 67, 54, 0.3)' },
+                },
                 '& canvas': {
                     maxWidth: '100% !important',
                     maxHeight: '100% !important',
                     objectFit: 'fill !important'
                 }
             }}
-            onMouseEnter={() => setIsHovering(true)}
+            onMouseEnter={() => !isInCall && !isIncomingCall && !isOutgoingCall && setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
             onClick={() => {
                 // Se há onClick (para atender chamada), executa-o
@@ -387,8 +394,8 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                         }}
                     />
                 </Box>
-            ) : isInCall ? (
-                // Em chamada ativa - botão ENCERRAR centralizado
+            ) : isInCall || isOutgoingCall ? (
+                // Em chamada ativa ou chamada sainte - botão ENCERRAR centralizado
                 <Box sx={{
                     position: 'absolute',
                     bottom: 20,
