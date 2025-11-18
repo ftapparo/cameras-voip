@@ -26,6 +26,19 @@ interface SipStatusBarProps {
 
 const SIP_CONFIG_KEY = 'sip_config';
 
+// Função para converter URL WebSocket baseado em HTTPS/HTTP
+const getSecureWebSocketUrl = (wsUrl: string): string => {
+    if (!wsUrl) return wsUrl;
+
+    const isSecure = window.location.protocol === 'https:';
+    const protocol = isSecure ? 'wss://' : 'ws://';
+
+    // Remove protocolo existente
+    const urlWithoutProtocol = wsUrl.replace(/^wss?:\/\//, '');
+
+    return protocol + urlWithoutProtocol;
+};
+
 export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSave }: SipStatusBarProps) => {
     const [configOpen, setConfigOpen] = useState(false);
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -36,7 +49,10 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
         try {
             const saved = localStorage.getItem(SIP_CONFIG_KEY);
             if (saved) {
-                return JSON.parse(saved);
+                const config = JSON.parse(saved);
+                // Converte WS para WSS se necessário
+                config.websocket = getSecureWebSocketUrl(config.websocket);
+                return config;
             }
         } catch (error) {
             console.error('Erro ao carregar configuração SIP:', error);
@@ -90,10 +106,16 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
     }, []);
 
     const handleSave = () => {
+        // Converte WS para WSS automaticamente se em HTTPS
+        const configToSave = {
+            ...formData,
+            websocket: getSecureWebSocketUrl(formData.websocket)
+        };
+
         // Salva no localStorage
-        localStorage.setItem(SIP_CONFIG_KEY, JSON.stringify(formData));
-        console.log('Configuração SIP salva no localStorage');
-        onConfigSave(formData);
+        localStorage.setItem(SIP_CONFIG_KEY, JSON.stringify(configToSave));
+        console.log('Configuração SIP salva no localStorage', configToSave);
+        onConfigSave(configToSave);
         setConfigOpen(false);
     };
 
