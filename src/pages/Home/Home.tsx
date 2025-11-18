@@ -44,6 +44,7 @@ const Home: React.FC = () => {
     // Estado para a área VoIP
     const [voipUrl, setVoipUrl] = React.useState<string | undefined>(undefined);
     const [voipKey, setVoipKey] = React.useState(0);
+    const [voipCameraId, setVoipCameraId] = React.useState<number | undefined>(undefined);
 
     // Estado para controlar chamada ativa (de ramal sem câmera)
     const [activeCallExtension, setActiveCallExtension] = React.useState<string | undefined>(undefined);
@@ -54,6 +55,28 @@ const Home: React.FC = () => {
     // Refs para os sons
     const phoneRingRef = React.useRef<HTMLAudioElement | null>(null);
     const phoneCallRef = React.useRef<HTMLAudioElement | null>(null);
+
+    // Ref para prevenir múltiplos hangups simultâneos
+    const isHangingUpRef = React.useRef(false);
+
+    // Wrapper seguro para hangup
+    const safeHangup = React.useCallback(() => {
+        if (isHangingUpRef.current) {
+            console.log('[Hangup] Já está encerrando, ignorando clique duplicado');
+            return;
+        }
+
+        isHangingUpRef.current = true;
+        console.log('[Hangup] Iniciando encerramento da chamada');
+
+        hangup();
+
+        // Reset do flag após um pequeno delay
+        setTimeout(() => {
+            isHangingUpRef.current = false;
+            console.log('[Hangup] Flag resetado');
+        }, 1000);
+    }, [hangup]);
 
     React.useEffect(() => {
         if (visibleCount < cameras.length) {
@@ -85,28 +108,36 @@ const Home: React.FC = () => {
         // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
         // Por enquanto, vou colocar sempre na área A
         setVoipUrl(highDefUrl);
+        setVoipCameraId(cameraId); // Armazena o ID da câmera atual
         setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
     };
 
     // Função para iniciar chamada sainte (outgoing call)
     const handleOutgoingCall = () => {
-        // Encontra a câmera correspondente ao voipUrl atual
-        const currentCamera = cameras.find(cam => getCameraUrl(cam.id, true) === voipUrl);
+        // Encontra a câmera correspondente ao voipCameraId atual
+        const currentCamera = cameras.find(cam => cam.id === voipCameraId);
 
-        if (currentCamera?.extension) {
-            console.log(`Iniciando chamada para extension: ${currentCamera.extension}`);
-
-            // Toca o som ANTES de fazer a chamada
-            if (phoneCallRef.current) {
-                phoneCallRef.current.loop = true;
-                phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
-            }
-
-            setIsOutgoingCall(true);
-            makeCall(currentCamera.extension);
-        } else {
-            console.warn('Nenhuma câmera selecionada ou extension não disponível');
+        // Verifica se a câmera tem extension (tem interfone)
+        if (!currentCamera) {
+            console.warn('Nenhuma câmera selecionada');
+            return;
         }
+
+        if (!currentCamera.extension) {
+            console.warn('Câmera sem interfone (extension null)');
+            return;
+        }
+
+        console.log(`Iniciando chamada para extension: ${currentCamera.extension}`);
+
+        // Toca o som ANTES de fazer a chamada
+        if (phoneCallRef.current) {
+            phoneCallRef.current.loop = true;
+            phoneCallRef.current.play().catch(err => console.error('Erro ao tocar phone-call:', err));
+        }
+
+        setIsOutgoingCall(true);
+        makeCall(currentCamera.extension);
     };
 
     // Detectar chamadas recebidas e carregar câmera automaticamente se disponível
@@ -179,6 +210,28 @@ const Home: React.FC = () => {
             }
         }
     }, [status.callConfirmed, isOutgoingCall, status.inCall]);
+
+    // Limpa estados quando a chamada é encerrada (proteção adicional)
+    React.useEffect(() => {
+        if (!status.inCall && !status.incomingCall) {
+            console.log('[Cleanup] Limpando estados após chamada encerrada');
+
+            // Para qualquer áudio que ainda esteja tocando
+            if (phoneCallRef.current && phoneCallRef.current.currentTime > 0) {
+                phoneCallRef.current.pause();
+                phoneCallRef.current.currentTime = 0;
+            }
+            if (phoneRingRef.current && phoneRingRef.current.currentTime > 0) {
+                phoneRingRef.current.pause();
+                phoneRingRef.current.currentTime = 0;
+            }
+
+            // Limpa estados
+            if (isOutgoingCall) {
+                setIsOutgoingCall(false);
+            }
+        }
+    }, [status.inCall, status.incomingCall, isOutgoingCall]);
 
     if (loading) {
         return (
@@ -263,7 +316,7 @@ const Home: React.FC = () => {
                             key={voipKey}
                             wsUrl={voipUrl}
                             isInCall={true}
-                            onHangup={hangup}
+                            onHangup={safeHangup}
                         />
                     ) : activeCallExtension ? (
                         // Chamada ativa de ramal sem câmera
@@ -272,7 +325,7 @@ const Home: React.FC = () => {
                             description={cameras.find(c => c.extension === activeCallExtension)?.description}
                             onAnswer={answerCall}
                             isInCall={true}
-                            onHangup={hangup}
+                            onHangup={safeHangup}
                         />
                     ) : isOutgoingCall && voipUrl ? (
                         // Chamada sainte em progresso (outgoing call)
@@ -280,15 +333,24 @@ const Home: React.FC = () => {
                             key={voipKey}
                             wsUrl={voipUrl}
                             isOutgoingCall={true}
-                            onHangup={hangup}
+                            onHangup={safeHangup}
                         />
                     ) : voipUrl ? (
                         // Câmera selecionada manualmente (sem chamada)
-                        <VoipCamera
-                            key={voipKey}
-                            wsUrl={voipUrl}
-                            onClick={handleOutgoingCall}
-                        />
+                        // Verifica se a câmera tem interfone (extension)
+                        cameras.find(c => c.id === voipCameraId)?.extension ? (
+                            <VoipCamera
+                                key={voipKey}
+                                wsUrl={voipUrl}
+                                onClick={handleOutgoingCall}
+                            />
+                        ) : (
+                            // Câmera sem interfone - apenas visualização
+                            <VoipCamera
+                                key={voipKey}
+                                wsUrl={voipUrl}
+                            />
+                        )
                     ) : (
                         // Nenhuma atividade
                         <Typography variant="h6" color="white" sx={{ m: 'auto' }}>

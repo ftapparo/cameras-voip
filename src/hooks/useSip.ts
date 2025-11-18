@@ -276,14 +276,26 @@ export const useSip = () => {
     };
 
     const hangup = () => {
+        console.log('[SIP] Hangup chamado - encerrando chamada');
+
         if (sessionRef.current) {
-            sessionRef.current.terminate();
-            sessionRef.current = null;
+            try {
+                console.log('[SIP] Terminando sessão...');
+                sessionRef.current.terminate();
+            } catch (error) {
+                console.error('[SIP] Erro ao terminar sessão:', error);
+            } finally {
+                sessionRef.current = null;
+            }
+        } else {
+            console.warn('[SIP] Nenhuma sessão ativa para encerrar');
         }
+
         setStatus(prev => ({
             ...prev,
             inCall: false,
             callStatus: 'Desligado',
+            callConfirmed: false,
             incomingCall: undefined
         }));
     };
