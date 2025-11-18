@@ -398,44 +398,29 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     />
                 </Box>
             ) : isInCall || isOutgoingCall ? (
-                // Em chamada ativa ou chamada sainte - botão ENCERRAR centralizado
-                <Box sx={{
-                    position: 'absolute',
-                    bottom: 20,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 10
-                }}>
-                    <Chip
-                        icon={<CallEndIcon />}
-                        label="ENCERRAR"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (onHangup) onHangup();
-                        }}
-                        sx={{
-                            width: '200px',
-                            height: '56px',
-                            backgroundColor: '#d32f2f',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            fontSize: '1.2rem',
-                            cursor: 'pointer',
-                            textTransform: 'uppercase',
-                            '&:hover': {
-                                backgroundColor: '#b71c1c'
-                            },
-                            '& .MuiChip-icon': {
-                                color: 'white',
-                                fontSize: '1.6rem'
-                            },
-                            '& .MuiChip-label': {
-                                fontSize: '1.2rem',
-                                fontWeight: 'bold'
-                            }
-                        }}
-                    />
-                </Box>
+                // Em chamada ativa ou chamada sainte - botão ENCERRAR circular vermelho
+                <IconButton
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (onHangup) onHangup();
+                    }}
+                    sx={{
+                        position: 'absolute',
+                        bottom: 16,
+                        right: 16,
+                        width: '64px',
+                        height: '64px',
+                        backgroundColor: '#d32f2f',
+                        color: 'white',
+                        zIndex: 10,
+                        '&:hover': {
+                            backgroundColor: '#b71c1c',
+                        },
+                        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)'
+                    }}
+                >
+                    <CallEndIcon sx={{ fontSize: '2rem' }} />
+                </IconButton>
             ) : (
                 // Comportamento normal - botão circular Ligar/Desligar
                 <IconButton

@@ -34,6 +34,42 @@ export const useSip = () => {
     const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
     const [config, setConfig] = useState<SipConfig | null>(null);
     const registrationTimeoutRef = useRef<number | null>(null);
+    const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);
+
+    // Verifica se há microfone disponível e pede permissão
+    useEffect(() => {
+        const checkMicrophone = async () => {
+            try {
+                // Verifica se há dispositivos de áudio disponíveis
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+                if (audioInputs.length > 0) {
+                    console.log(`[Microfone] ${audioInputs.length} microfone(s) detectado(s)`);
+
+                    // Pede permissão para usar o microfone
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        console.log('[Microfone] Permissão concedida');
+                        setHasMicrophone(true);
+                        // Para o stream imediatamente, só queríamos verificar a permissão
+                        stream.getTracks().forEach(track => track.stop());
+                    } catch (permissionError) {
+                        console.warn('[Microfone] Permissão negada ou erro:', permissionError);
+                        setHasMicrophone(false);
+                    }
+                } else {
+                    console.log('[Microfone] Nenhum microfone detectado');
+                    setHasMicrophone(false);
+                }
+            } catch (error) {
+                console.error('[Microfone] Erro ao verificar dispositivos:', error);
+                setHasMicrophone(false);
+            }
+        };
+
+        checkMicrophone();
+    }, []);
 
     const attachRemoteAudio = (session: any) => {
         session.connection.addEventListener('track', (event: any) => {
@@ -189,7 +225,6 @@ export const useSip = () => {
                 uaRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [config]);
 
     const makeCall = (destination: string) => {
@@ -205,7 +240,7 @@ export const useSip = () => {
         }));
 
         const session = uaRef.current.call(destination, {
-            mediaConstraints: { audio: false, video: false },
+            mediaConstraints: { audio: hasMicrophone, video: false },
             rtcOfferConstraints: {
                 offerToReceiveAudio: true,
             },
@@ -253,7 +288,7 @@ export const useSip = () => {
             const session = status.incomingCall.session;
 
             session.answer({
-                mediaConstraints: { audio: false, video: false },
+                mediaConstraints: { audio: hasMicrophone, video: false },
             });
 
             attachRemoteAudio(session);
