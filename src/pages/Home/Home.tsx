@@ -4,7 +4,6 @@ import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
 import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
 import { IncomingCall } from '../../components/IncomingCall/IncomingCall';
 import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
-import { PermissionWarning } from '../../components/PermissionWarning/PermissionWarning';
 import { useSip } from '../../hooks/useSip';
 import { Box, Typography } from '@mui/material';
 
@@ -257,7 +256,6 @@ const Home: React.FC = () => {
 
     return (
         <Box sx={{ width: '100vw', height: '100vh', background: '#000', m: 0, p: 0, overflow: 'hidden', position: 'fixed', top: 0, left: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'stretch', paddingBottom: '50px' }}>
-            <PermissionWarning hasMicrophone={status.isConnected} />
             <Box sx={{
                 width: '100%',
                 height: '100%',
