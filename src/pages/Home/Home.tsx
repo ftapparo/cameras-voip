@@ -83,7 +83,7 @@ const Home: React.FC = () => {
         if (visibleCount < cameras.length) {
             const timer = setTimeout(() => {
                 setVisibleCount(visibleCount + 1);
-            }, 500);
+            }, 150);
             return () => clearTimeout(timer);
         }
     }, [visibleCount, cameras.length]);
