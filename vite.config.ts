@@ -10,10 +10,21 @@ export default defineConfig({
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,webp}'],
-        globIgnores: ['**/*.mp3', '**/stream/**', '**/api/**'],
+        globIgnores: ['**/*.{mp3,mp4,webm}', '**/stream/**', '**/api/**'],
         clientsClaim: true,
         skipWaiting: true,
-        runtimeCaching: []
+        maximumFileSizeToCacheInBytes: 5000000,
+        // Estratégia padrão para tudo
+        runtimeCaching: [
+          // Cache-first para assets estáticos
+          {
+            urlPattern: /\.(js|css|html|png|webp|woff|woff2)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'static-cache'
+            }
+          }
+        ]
       },
       manifest: {
         name: 'Cameras VoIP - Portaria',
