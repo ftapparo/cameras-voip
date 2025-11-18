@@ -2,6 +2,28 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Tenta usar o certificado gerado, senão usa o básico
+let httpsConfig = {};
+const pfxPath = path.join(__dirname, 'certs', 'cert.pfx');
+
+if (fs.existsSync(pfxPath)) {
+  try {
+    httpsConfig = {
+      pfx: fs.readFileSync(pfxPath),
+      passphrase: 'password'
+    };
+    console.log('✅ Usando certificado PFX gerado');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (err) {
+    console.log('⚠️  Não consegui ler PFX, usando certificado padrão');
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -66,10 +88,12 @@ export default defineConfig({
     }
   },
   server: {
+    https: Object.keys(httpsConfig).length > 0 ? httpsConfig : undefined,
     host: '0.0.0.0',
     port: 5173
   },
   preview: {
+    https: Object.keys(httpsConfig).length > 0 ? httpsConfig : undefined,
     host: '0.0.0.0',
     port: 4173
   }
