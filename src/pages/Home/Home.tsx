@@ -78,12 +78,6 @@ const Home: React.FC = () => {
     // Ref para prevenir múltiplos hangups simultâneos
     const isHangingUpRef = React.useRef(false);
 
-    // Callback para quando o VoipCamera termina de carregar
-    const handleVoipCameraLoadingComplete = React.useCallback(() => {
-        console.log('[Home] VoipCamera carregamento completo, liberando câmeras');
-        setVoipUrl(undefined);
-    }, []);
-
     // Wrapper seguro para hangup
     const safeHangup = React.useCallback(() => {
         if (isHangingUpRef.current) {
@@ -372,7 +366,6 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
                             hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
-                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : (
                         // Nenhuma atividade
