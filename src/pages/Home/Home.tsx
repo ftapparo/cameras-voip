@@ -50,9 +50,11 @@ const Home: React.FC = () => {
                 // Limita para as 14 primeiras câmeras
                 setCameras(response.data.cameras.slice(0, 14));
                 setLoading(false);
+                setVoipCameraLoading(false); // Adiciona aqui
             } catch (error) {
                 console.error('Erro ao carregar câmeras:', error);
                 setLoading(false);
+                setVoipCameraLoading(false); // Também no catch
             }
         };
 

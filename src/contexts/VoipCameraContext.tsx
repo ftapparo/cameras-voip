@@ -12,11 +12,11 @@ interface VoipCameraContextType {
 const VoipCameraContext = createContext<VoipCameraContextType | undefined>(undefined);
 
 export const VoipCameraProvider: React.FC<{ children: any }> = ({ children }) => {
-    const [voipCameraLoading, setVoipCameraLoading] = useState(false);
+    const [voipCameraLoading, setVoipCameraLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        console.error('VoipCamera status: ', voipCameraLoading);
+        console.log('[VoipCamera] Loading status:', voipCameraLoading);
     }, [voipCameraLoading]);
 
     return (

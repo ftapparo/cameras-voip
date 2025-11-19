@@ -31,7 +31,7 @@ function createWindow() {
   }
 
   // Abre DevTools para debug
-  mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
 
   // Evento para quando a janela é fechada
   mainWindow.on('closed', () => {

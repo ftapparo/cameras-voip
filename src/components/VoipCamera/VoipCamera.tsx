@@ -269,7 +269,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 destroyFnRef.current = null;
             }
         };
-    }, [wsUrl, retryCount, MAX_RETRIES]);
+    }, [wsUrl, retryCount, MAX_RETRIES, onLoadingComplete, setVoipCameraLoading]);
 
     // Efeito para chamar callback quando carregamento completa
     useEffect(() => {
