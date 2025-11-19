@@ -10,8 +10,7 @@ function createWindow() {
     icon: path.join(__dirname, 'public', 'icon-512x512.png'),
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js') // Removido se não existir, mas pode ser necessário
+      contextIsolation: true
     },
   });
 
@@ -37,10 +36,6 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-
-  // Impede garbage collection agressivo de objetos da WebAPI
-  // Isso pode ajudar com o JsSIP que usa WebRTC
-  mainWindow.webContents.session.setPreloads([]);
 }
 
 app.whenReady().then(() => {

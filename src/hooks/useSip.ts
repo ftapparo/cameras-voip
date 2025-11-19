@@ -339,13 +339,9 @@ export const useSip = () => {
             callConfirmed: false
         }));
 
-        // Constraints mais robustas para Electron
-        const mediaConstraints: any = {
-            audio: hasMicrophone ? {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            } : false,
+        // Constraints simples - Issabel/Asterisk pode rejeitar constraints complexas
+        const mediaConstraints = {
+            audio: hasMicrophone,
             video: false
         };
 
@@ -524,13 +520,9 @@ export const useSip = () => {
             console.log('[SIP] Respondendo chamada, session ID:', session?.id);
             console.log('[SIP] Microfone disponível:', hasMicrophone);
 
-            // Constraints mais robustas para Electron
-            const mediaConstraints: any = {
-                audio: hasMicrophone ? {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                } : false,
+            // Constraints simples - Issabel/Asterisk pode rejeitar constraints complexas
+            const mediaConstraints = {
+                audio: hasMicrophone,
                 video: false
             };
 
