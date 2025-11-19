@@ -6,6 +6,7 @@ import { IncomingCall } from '../../components/IncomingCall/IncomingCall';
 import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
 import { useSip } from '../../hooks/useSip';
 import { Box, Typography } from '@mui/material';
+import { useVoipCamera } from '../../contexts/VoipCameraContext';
 
 interface Camera {
     id: number;
@@ -16,6 +17,7 @@ interface Camera {
 const Home: React.FC = () => {
     // Hook SIP
     const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip();
+    const { voipCameraLoading, setVoipCameraLoading } = useVoipCamera();
 
     // Debug: log quando o ref é criado
     React.useEffect(() => {
@@ -82,8 +84,9 @@ const Home: React.FC = () => {
     // Callback para quando o VoipCamera termina de carregar
     const handleVoipCameraLoadingComplete = React.useCallback(() => {
         console.log('[Home] VoipCamera carregamento completo, desbloqueando');
+        setVoipCameraLoading(false);
         setIsVoipCameraLoading(false);
-    }, []);
+    }, [setVoipCameraLoading]);
 
     // Wrapper seguro para hangup
     const safeHangup = React.useCallback(() => {
@@ -122,13 +125,13 @@ const Home: React.FC = () => {
     // Função para lidar com o clique em uma câmera pequena
     const handleCameraClick = (cameraId: number) => {
         // Bloqueia troca de câmera durante chamadas
-        if (status.incomingCall || status.inCall || isOutgoingCall) {
+        if (status.incomingCall || status.inCall || isOutgoingCall || voipCameraLoading) {
             console.log('Troca de câmera bloqueada durante chamada');
             return;
         }
 
         // Bloqueia cliques rápidos enquanto carrega câmera
-        if (isVoipCameraLoading) {
+        if (isVoipCameraLoading || voipCameraLoading) {
             console.log('Clique ignorado: câmera ainda está carregando. ID atual:', voipCameraId);
             return;
         }
@@ -139,6 +142,7 @@ const Home: React.FC = () => {
 
         // Marca como carregando
         setIsVoipCameraLoading(true);
+        setVoipCameraLoading(true);
 
         // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
         // Por enquanto, vou colocar sempre na área A

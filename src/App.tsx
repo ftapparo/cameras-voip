@@ -1,8 +1,12 @@
-
+import { VoipCameraProvider } from './contexts/VoipCameraContext';
 import Home from './pages/Home/Home';
 
 function App() {
-  return <Home />;
+  return (
+    <VoipCameraProvider>
+      <Home />
+    </VoipCameraProvider>
+  );
 }
 
 export default App;
