@@ -74,8 +74,12 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 destroyFnRef.current();
                 destroyFnRef.current = null;
             }
+            setIsVoipCameraLoading(false);
             return;
         }
+
+        // Reset do bloqueio quando muda de câmera
+        setIsVoipCameraLoading(true);
 
         let destroyed = false;
 
