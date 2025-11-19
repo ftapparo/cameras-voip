@@ -179,7 +179,9 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     destroyFnRef.current = result.destroy;
                     playerLoadedRef.current = true;
                     console.log("Player carregado com sucesso");
+                    console.log("[VoipCamera] Chamando setIsVoipCameraLoading(false)");
                     setIsVoipCameraLoading(false);
+                    console.log("[VoipCamera] Após chamar setIsVoipCameraLoading");
                 }
 
                 // Timeout de segurança

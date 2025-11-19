@@ -109,6 +109,7 @@ const Home: React.FC = () => {
 
     // Monitora quando o carregamento da câmera termina
     React.useEffect(() => {
+        console.log('[Home] isVoipCameraLoading mudou para:', isVoipCameraLoading);
         if (!isVoipCameraLoading && voipUrl) {
             console.log('[Home] Câmera carregada');
         }
@@ -125,12 +126,6 @@ const Home: React.FC = () => {
         // Bloqueia se há carregamento de câmera em curso
         if (isVoipCameraLoading) {
             console.log('[Home] 🔒 Câmera em carregamento, clique bloqueado');
-            return;
-        }
-
-        // Bloqueia se já há uma câmera em exibição (igual como faz com chamadas)
-        if (voipUrl) {
-            console.log('[Home] Câmera já em exibição, clique bloqueado');
             return;
         }
 
