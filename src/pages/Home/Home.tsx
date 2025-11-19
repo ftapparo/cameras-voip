@@ -88,13 +88,15 @@ const Home: React.FC = () => {
     // Timeout de 10 segundos para desbloquear câmeras automaticamente
     React.useEffect(() => {
         if (!isVoipCameraLoading) {
+            console.log('[Home] isVoipCameraLoading é FALSE, desactivando timeout');
             return;
         }
 
-        console.log('[Home] Iniciando timeout de 10s para desbloquear câmeras');
+        console.log('[Home] 🔒 Iniciando timeout de 10s para desbloquear câmeras');
+        console.log('[Home] isVoipCameraLoading:', isVoipCameraLoading);
 
         const timeoutId = setTimeout(() => {
-            console.log('[Home] Timeout de 10s atingido, desbloqueando câmeras');
+            console.log('[Home] ⏱️ Timeout de 10s ATINGIDO, desbloqueando câmeras');
             setIsVoipCameraLoading(false);
         }, 10000); // 10 segundos
 
@@ -139,24 +141,34 @@ const Home: React.FC = () => {
 
     // Função para lidar com o clique em uma câmera pequena
     const handleCameraClick = (cameraId: number) => {
+        console.log('[Home] handleCameraClick chamado para câmera:', cameraId);
+        console.log('[Home] Estado atual:', {
+            isVoipCameraLoading,
+            voipCameraId,
+            incomingCall: status.incomingCall,
+            inCall: status.inCall,
+            isOutgoingCall
+        });
+
         // Bloqueia troca de câmera durante chamadas
         if (status.incomingCall || status.inCall || isOutgoingCall) {
-            console.log('Troca de câmera bloqueada durante chamada');
+            console.log('[Home] ❌ Troca de câmera bloqueada durante chamada');
             return;
         }
 
         // Bloqueia cliques rápidos enquanto carrega câmera
         if (isVoipCameraLoading) {
-            console.log('Clique ignorado: câmera ainda está carregando. ID atual:', voipCameraId);
+            console.log('[Home] ❌ Clique ignorado: câmera ainda está carregando. ID atual:', voipCameraId);
             return;
         }
 
         const highDefUrl = getCameraUrl(cameraId, true);
 
-        console.log(`Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
+        console.log(`[Home] ✅ Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
 
         // Marca como carregando
         setIsVoipCameraLoading(true);
+        console.log('[Home] ✅ isVoipCameraLoading definido como TRUE');
 
         // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
         // Por enquanto, vou colocar sempre na área A

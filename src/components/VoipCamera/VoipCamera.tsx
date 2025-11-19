@@ -66,14 +66,24 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
         console.log('[VoipCamera] Verificando loading:', {
             isLoading,
             temCallback: !!onLoadingComplete,
-            wsUrl
+            wsUrl,
+            callbackCalled: callbackCalledRef.current
         });
 
-        if (!isLoading && onLoadingComplete) {
+        if (!isLoading && onLoadingComplete && !callbackCalledRef.current) {
             console.log('[VoipCamera] Carregamento concluído, chamando callback');
+            callbackCalledRef.current = true;
             onLoadingComplete();
         }
     }, [isLoading, onLoadingComplete, wsUrl]);
+
+    // Reseta a flag quando uma nova URL começa a carregar
+    useEffect(() => {
+        if (isLoading) {
+            console.log('[VoipCamera] Nova carga iniciada, resetando flag de callback');
+            callbackCalledRef.current = false;
+        }
+    }, [isLoading]);
 
     useEffect(() => {
 
