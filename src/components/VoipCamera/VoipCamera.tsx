@@ -208,6 +208,12 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     destroyFnRef.current = result.destroy;
                     playerLoadedRef.current = true;
                     console.log("Player carregado com sucesso");
+
+                    // Libera câmeras imediatamente quando player carrega
+                    if (onLoadingComplete) {
+                        console.log("[VoipCamera] Liberando bloqueio de câmeras");
+                        onLoadingComplete();
+                    }
                 }
 
                 // Timeout de segurança
