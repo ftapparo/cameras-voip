@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
 let mainWindow;
@@ -10,7 +10,8 @@ function createWindow() {
     icon: path.join(__dirname, 'public', 'icon-512x512.png'),
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     },
   });
 
@@ -37,6 +38,17 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+// Gerenciador de IPC para toggle DevTools
+ipcMain.on('toggle-devtools', (event) => {
+  if (mainWindow) {
+    if (mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+    } else {
+      mainWindow.webContents.openDevTools();
+    }
+  }
+});
 
 app.whenReady().then(() => {
   console.log('[Electron] App pronto, criando janela');

@@ -4,6 +4,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PhoneIcon from '@mui/icons-material/Phone';
 import PhoneDisabledIcon from '@mui/icons-material/PhoneDisabled';
 import DownloadIcon from '@mui/icons-material/Download';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 
 interface BeforeInstallPromptEvent extends Event {
     prompt: () => Promise<void>;
@@ -30,6 +33,7 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
     const [configOpen, setConfigOpen] = useState(false);
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [showInstallButton, setShowInstallButton] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
 
     // Carrega configuração do localStorage
     const loadSavedConfig = (): SipConfig => {
@@ -124,6 +128,53 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
         return 'Desconectado';
     };
 
+    const handleOpenDevTools = () => {
+        const electron = (window as unknown as { electron?: { ipcRenderer?: { send: (channel: string) => void } } }).electron;
+        if (electron?.ipcRenderer?.send) {
+            electron.ipcRenderer.send('toggle-devtools');
+        } else {
+            console.log('Abrindo DevTools via Ctrl+Shift+I');
+            // Fallback para browsers
+            const devToolsKey = new KeyboardEvent('keydown', {
+                key: 'I',
+                code: 'KeyI',
+                ctrlKey: true,
+                shiftKey: true
+            });
+            document.dispatchEvent(devToolsKey);
+        }
+    };
+
+    const handleToggleFullscreen = async () => {
+        try {
+            if (!isFullscreen) {
+                // Entrar em fullscreen
+                await document.documentElement.requestFullscreen();
+                setIsFullscreen(true);
+            } else {
+                // Sair de fullscreen
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                }
+                setIsFullscreen(false);
+            }
+        } catch (error) {
+            console.error('Erro ao alternar fullscreen:', error);
+        }
+    };
+
+    // Monitora mudanças de fullscreen
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        };
+    }, []);
+
     return (
         <>
             <Box
@@ -175,6 +226,34 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                         Clique para instalar
                     </Button>
                 )}
+
+                {/* Fullscreen */}
+                <IconButton
+                    onClick={handleToggleFullscreen}
+                    title={isFullscreen ? 'Sair de tela cheia' : 'Entrar em tela cheia'}
+                    sx={{
+                        color: 'white',
+                        '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }}
+                >
+                    {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                </IconButton>
+
+                {/* DevTools */}
+                <IconButton
+                    onClick={handleOpenDevTools}
+                    title="Abrir DevTools"
+                    sx={{
+                        color: 'white',
+                        '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }}
+                >
+                    <MoreVertIcon />
+                </IconButton>
 
                 {/* Configurações */}
                 <IconButton
