@@ -79,6 +79,12 @@ const Home: React.FC = () => {
     // Ref para prevenir múltiplos hangups simultâneos
     const isHangingUpRef = React.useRef(false);
 
+    // Callback para quando o VoipCamera termina de carregar
+    const handleVoipCameraLoadingComplete = React.useCallback(() => {
+        console.log('[Home] VoipCamera carregamento completo, desbloqueando');
+        setIsVoipCameraLoading(false);
+    }, []);
+
     // Wrapper seguro para hangup
     const safeHangup = React.useCallback(() => {
         if (isHangingUpRef.current) {
@@ -342,7 +348,7 @@ const Home: React.FC = () => {
                                 onClick={answerCall}
                                 isIncomingCall={true}
                                 onReject={hangup}
-                                onLoadingComplete={() => setIsVoipCameraLoading(false)}
+                                onLoadingComplete={handleVoipCameraLoadingComplete}
                             />
                         ) : (
                             // Ramal sem câmera - mostra IncomingCall
@@ -360,7 +366,7 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             isInCall={true}
                             onHangup={safeHangup}
-                            onLoadingComplete={() => setIsVoipCameraLoading(false)}
+                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : activeCallExtension ? (
                         // Chamada ativa de ramal sem câmera
@@ -378,7 +384,7 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             isOutgoingCall={true}
                             onHangup={safeHangup}
-                            onLoadingComplete={() => setIsVoipCameraLoading(false)}
+                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : voipUrl ? (
                         // Câmera selecionada manualmente (sem chamada)
@@ -387,7 +393,7 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
                             hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
-                            onLoadingComplete={() => setIsVoipCameraLoading(false)}
+                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : (
                         // Nenhuma atividade
