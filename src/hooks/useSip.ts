@@ -159,6 +159,8 @@ export const useSip = () => {
             uri: sipConfig.uri,
             password: sipConfig.password,
             register: true,
+            session_timers: false,
+            use_preloaded_route: true,
         });
 
         ua.on('connected', () => {
@@ -347,12 +349,9 @@ export const useSip = () => {
 
         console.log('[SIP] Media constraints:', mediaConstraints);
 
+        // Não usar rtcOfferConstraints - deixar o JsSIP configurar automaticamente
         const session = uaRef.current.call(destination, {
-            mediaConstraints: mediaConstraints,
-            rtcOfferConstraints: {
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: false,
-            },
+            mediaConstraints: mediaConstraints
         });
 
         console.log('[SIP] Sessão criada, ID:', session?.id);
@@ -410,6 +409,12 @@ export const useSip = () => {
                 console.log('[SIP] PeerConnection state:', pc.connectionState);
                 console.log('[SIP] PeerConnection iceConnectionState:', pc.iceConnectionState);
                 console.log('[SIP] PeerConnection signalingState:', pc.signalingState);
+
+                // Log do SDP local se disponível
+                if (pc.localDescription) {
+                    console.log('[SIP] SDP Local (tipo:', pc.localDescription.type, ')');
+                    console.log('[SIP] SDP:', pc.localDescription.sdp?.substring(0, 500));
+                }
 
                 // Monitora mudanças de estado
                 pc.onconnectionstatechange = () => {
