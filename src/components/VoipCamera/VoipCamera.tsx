@@ -12,6 +12,7 @@ interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> 
     onReject?: () => void;
     onHangup?: () => void;
     hasVoip?: boolean; // Indica se a câmera tem funcionalidade VoIP
+    onLoadingComplete?: () => void; // Callback quando o carregamento termina
 }
 
 interface PlayerWithDestroy {
@@ -20,7 +21,7 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -59,6 +60,14 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
         };
     }, []);
 
+    // Callback quando o carregamento é concluído
+    useEffect(() => {
+        if (!isLoading && onLoadingComplete) {
+            console.log('[VoipCamera] Carregamento concluído, chamando callback');
+            onLoadingComplete();
+        }
+    }, [isLoading, onLoadingComplete]);
+
     useEffect(() => {
 
         console.log(`Carregando VoipCamera com URL: ${wsUrl}`);
@@ -93,6 +102,12 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             } else {
                 console.error(`[VoIP ${wsUrl}] Falha após ${MAX_RETRIES} tentativas`);
                 setIsLoading(false);
+
+                // Força callback mesmo após falha
+                if (onLoadingComplete) {
+                    console.log('[VoipCamera] Carregamento falhou, chamando callback');
+                    onLoadingComplete();
+                }
             }
         };
 

@@ -38,6 +38,14 @@ export const useSip = () => {
     const registrationTimeoutRef = useRef<number | null>(null);
     const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);
 
+    // IMPORTANTE: Mantém referência ao objeto de session para evitar garbage collection
+    // Isso é crítico em Electron onde o GC pode ser mais agressivo
+    const sessionStateRef = useRef<{
+        session: any;
+        listeners: Map<string, any>;
+        keepAliveTimer?: number;
+    } | null>(null);
+
     // Verifica se há microfone disponível e pede permissão
     useEffect(() => {
         const checkMicrophone = async () => {
@@ -74,36 +82,61 @@ export const useSip = () => {
     }, []);
 
     const attachRemoteAudio = (session: any) => {
-        let retries = 0;
-        const maxRetries = 50; // 5 segundos com polling de 100ms
+        console.log('[Audio] Iniciando attachRemoteAudio, remoteAudioRef.current:', remoteAudioRef.current);
 
-        const tryAttachAudio = () => {
-            if (remoteAudioRef.current) {
-                console.log('[Audio] Ref encontrado após retentativas:', retries);
-                session.connection.addEventListener('track', (event: any) => {
-                    const [stream] = event.streams;
-                    console.log('[Audio] Track recebido:', event.track.kind);
-                    if (remoteAudioRef.current) {
-                        remoteAudioRef.current.srcObject = stream;
-                        remoteAudioRef.current.volume = 1;
-                        remoteAudioRef.current.play().catch((err) => {
-                            console.error('[Audio] Erro ao reproduzir:', err);
-                        });
-                        console.log('[Audio] Stream configurado e iniciando reprodução');
-                    }
-                });
-                return;
-            }
+        // Configura listener para receber o áudio ANTES de qualquer coisa
+        // Isso garante que o stream será capturado assim que disponível
+        const handleTrack = (event: any) => {
+            console.log('[Audio] Track recebido:', event.track.kind);
+            const [stream] = event.streams;
 
-            if (retries < maxRetries) {
-                retries++;
-                setTimeout(tryAttachAudio, 100);
-            } else {
-                console.error('[Audio] remoteAudioRef não encontrado após múltiplas tentativas');
+            if (stream) {
+                console.log('[Audio] Stream disponível, tentando atribuir...');
+
+                // Tenta usar remoteAudioRef se disponível
+                if (remoteAudioRef.current) {
+                    remoteAudioRef.current.srcObject = stream;
+                    remoteAudioRef.current.volume = 1;
+                    remoteAudioRef.current.play().catch((err) => {
+                        console.error('[Audio] Erro ao reproduzir:', err);
+                    });
+                    console.log('[Audio] Stream configurado e reprodução iniciada via ref');
+                } else {
+                    // Fallback: cria um elemento audio se o ref não existir
+                    console.warn('[Audio] remoteAudioRef.current não encontrado, criando audio element de fallback');
+                    const audioElement = document.createElement('audio');
+                    audioElement.autoplay = true;
+                    audioElement.srcObject = stream;
+                    audioElement.volume = 1;
+                    audioElement.style.display = 'none';
+                    document.body.appendChild(audioElement);
+                    console.log('[Audio] Audio element criado e adicionado ao DOM');
+                }
             }
         };
 
-        tryAttachAudio();
+        // Tenta anexar listener ao connection se disponível
+        if (session.connection) {
+            console.log('[Audio] session.connection disponível, adicionando listener de track');
+            session.connection.addEventListener('track', handleTrack);
+        } else {
+            console.warn('[Audio] session.connection não está disponível ainda');
+
+            // Aguarda um pouco e tenta novamente (race condition comum)
+            let retries = 0;
+            const tryConnect = () => {
+                if (session.connection) {
+                    console.log('[Audio] session.connection agora disponível (retry #', retries, ')');
+                    session.connection.addEventListener('track', handleTrack);
+                } else if (retries < 10) {
+                    retries++;
+                    setTimeout(tryConnect, 100);
+                } else {
+                    console.error('[Audio] session.connection nunca ficou disponível após retries');
+                }
+            };
+            setTimeout(tryConnect, 50);
+        }
     };
 
     const startUA = (sipConfig: SipConfig) => {
@@ -198,9 +231,17 @@ export const useSip = () => {
         ua.on('newRTCSession', (data: any) => {
             const session = data.session;
 
+            console.log('[SIP] Evento newRTCSession:', {
+                originator: data.originator,
+                sessionId: session?.id,
+                remoteUser: data.originator === 'remote' ? session?.remote_identity?.uri?.user : 'N/A'
+            });
+
             if (data.originator === 'remote') {
                 // Extrai o ramal do chamador
                 const remoteIdentity = session.remote_identity.uri.user;
+
+                console.log('[SIP] Chamada recebida do ramal:', remoteIdentity);
 
                 setStatus(prev => ({
                     ...prev,
@@ -214,7 +255,8 @@ export const useSip = () => {
                 // NÃO atende automaticamente - aguarda o usuário clicar
                 sessionRef.current = session;
 
-                session.on('ended', () => {
+                session.on('ended', (data_ended: any) => {
+                    console.log('[SIP - newRTCSession] Evento: ended', data_ended);
                     setStatus(prev => ({
                         ...prev,
                         inCall: false,
@@ -223,13 +265,18 @@ export const useSip = () => {
                     }));
                 });
 
-                session.on('failed', () => {
+                session.on('failed', (data_failed: any) => {
+                    console.log('[SIP - newRTCSession] Evento: failed', data_failed);
                     setStatus(prev => ({
                         ...prev,
                         inCall: false,
-                        callStatus: 'Chamada falhou',
+                        callStatus: 'Chamada falhou: ' + data_failed.cause,
                         incomingCall: undefined
                     }));
+                });
+
+                session.on('rejected', (data_rejected: any) => {
+                    console.log('[SIP - newRTCSession] Evento: rejected', data_rejected);
                 });
             }
         });
@@ -242,12 +289,36 @@ export const useSip = () => {
     useEffect(() => {
         if (!config) return;
 
+        console.log('[SIP] useEffect: iniciando UA com config');
         startUA(config);
 
         return () => {
+            console.log('[SIP] useEffect cleanup: parando UA');
+
+            // Limpa listeners e referências
+            if (sessionStateRef.current) {
+                console.log('[SIP] Limpando sessionStateRef');
+                sessionStateRef.current.listeners.clear();
+                sessionStateRef.current = null;
+            }
+
+            if (sessionRef.current) {
+                try {
+                    sessionRef.current.terminate();
+                } catch (e) {
+                    console.warn('[SIP] Erro ao terminar sessão no cleanup:', e);
+                }
+                sessionRef.current = null;
+            }
+
             if (uaRef.current) {
                 uaRef.current.stop();
                 uaRef.current = null;
+            }
+
+            if (registrationTimeoutRef.current) {
+                clearTimeout(registrationTimeoutRef.current);
+                registrationTimeoutRef.current = null;
             }
         };
     }, [config]);
@@ -258,6 +329,9 @@ export const useSip = () => {
             return;
         }
 
+        console.log('[SIP] Iniciando makeCall para:', destination);
+        console.log('[SIP] Microfone disponível:', hasMicrophone);
+
         setStatus(prev => ({
             ...prev,
             inCall: true,
@@ -265,37 +339,150 @@ export const useSip = () => {
             callConfirmed: false
         }));
 
+        // Constraints mais robustas para Electron
+        const mediaConstraints: any = {
+            audio: hasMicrophone ? {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            } : false,
+            video: false
+        };
+
+        console.log('[SIP] Media constraints:', mediaConstraints);
+
         const session = uaRef.current.call(destination, {
-            mediaConstraints: { audio: hasMicrophone, video: false },
+            mediaConstraints: mediaConstraints,
             rtcOfferConstraints: {
                 offerToReceiveAudio: true,
+                offerToReceiveVideo: false,
             },
         });
 
+        console.log('[SIP] Sessão criada, ID:', session?.id);
+
         sessionRef.current = session;
+        // IMPORTANTE: Mantém referência forte para evitar garbage collection
+        sessionStateRef.current = {
+            session: session,
+            listeners: new Map()
+        };
+
         attachRemoteAudio(session);
 
-        session.on('confirmed', () => {
+        // Log detalhado de eventos
+        const onConfirmed = () => {
+            console.log('[SIP] Evento: confirmed - Chamada confirmada');
             setStatus(prev => ({ ...prev, callStatus: 'Em chamada', callConfirmed: true }));
-        });
+        };
 
-        session.on('ended', () => {
+        const onEnded = (data: any) => {
+            console.log('[SIP] Evento: ended - Chamada encerrada', data);
+            sessionStateRef.current = null; // Limpa referência
             setStatus(prev => ({
                 ...prev,
                 inCall: false,
                 callStatus: 'Chamada encerrada',
                 callConfirmed: false
             }));
-        });
+        };
 
-        session.on('failed', (e: any) => {
+        const onFailed = (e: any) => {
+            console.log('[SIP] Evento: failed - Chamada falhou. Causa:', e.cause);
+            console.log('[SIP] Dados completos do erro:', e);
+            sessionStateRef.current = null; // Limpa referência
             setStatus(prev => ({
                 ...prev,
                 inCall: false,
                 callStatus: 'Chamada falhou: ' + e.cause,
                 callConfirmed: false
             }));
-        });
+        };
+
+        const onAccepted = () => {
+            console.log('[SIP] Evento: accepted - Chamada aceita pelo servidor');
+        };
+
+        const onProgress = (data: any) => {
+            console.log('[SIP] Evento: progress - Progresso da chamada:', data);
+        };
+
+        const onPeerConnection = (data: any) => {
+            console.log('[SIP] Evento: peerconnection - Conexão P2P estabelecida');
+            if (data.peerconnection) {
+                const pc = data.peerconnection;
+                console.log('[SIP] PeerConnection state:', pc.connectionState);
+                console.log('[SIP] PeerConnection iceConnectionState:', pc.iceConnectionState);
+                console.log('[SIP] PeerConnection signalingState:', pc.signalingState);
+
+                // Monitora mudanças de estado
+                pc.onconnectionstatechange = () => {
+                    console.log('[SIP] PeerConnection connectionState:', pc.connectionState);
+                };
+
+                pc.oniceconnectionstatechange = () => {
+                    console.log('[SIP] PeerConnection iceConnectionState:', pc.iceConnectionState);
+                };
+
+                pc.onsignalingstatechange = () => {
+                    console.log('[SIP] PeerConnection signalingState:', pc.signalingState);
+                };
+
+                // Monitora ICE candidates
+                pc.onicecandidate = (event: any) => {
+                    if (event.candidate) {
+                        console.log('[SIP] ICE candidate adicionado:', event.candidate.candidate?.substring(0, 100));
+                    } else {
+                        console.log('[SIP] Coleta de ICE candidates completa');
+                    }
+                };
+            }
+        };
+
+        // Adiciona listeners para eventos adicionais que podem causar desconexão
+        const onHold = () => {
+            console.log('[SIP] Evento: hold - Chamada colocada em espera');
+        };
+
+        const onUnhold = () => {
+            console.log('[SIP] Evento: unhold - Chamada retomada');
+        };
+
+        const onMute = (data: any) => {
+            console.log('[SIP] Evento: mute', data);
+        };
+
+        const onUnmute = (data: any) => {
+            console.log('[SIP] Evento: unmute', data);
+        };
+
+        // Registra listeners principais
+        session.on('confirmed', onConfirmed);
+        session.on('ended', onEnded);
+        session.on('failed', onFailed);
+        session.on('accepted', onAccepted);
+        session.on('progress', onProgress);
+        session.on('peerconnection', onPeerConnection);
+        session.on('hold', onHold);
+        session.on('unhold', onUnhold);
+        session.on('muted', onMute);
+        session.on('unmuted', onUnmute);
+
+        // Armazena listeners no ref para possível cleanup posterior
+        if (sessionStateRef.current) {
+            sessionStateRef.current.listeners.set('confirmed', onConfirmed);
+            sessionStateRef.current.listeners.set('ended', onEnded);
+            sessionStateRef.current.listeners.set('failed', onFailed);
+            sessionStateRef.current.listeners.set('accepted', onAccepted);
+            sessionStateRef.current.listeners.set('progress', onProgress);
+            sessionStateRef.current.listeners.set('peerconnection', onPeerConnection);
+            sessionStateRef.current.listeners.set('hold', onHold);
+            sessionStateRef.current.listeners.set('unhold', onUnhold);
+            sessionStateRef.current.listeners.set('muted', onMute);
+            sessionStateRef.current.listeners.set('unmuted', onUnmute);
+        }
+
+        console.log('[SIP] Listeners configurados para a sessão');
     };
 
     const hangup = () => {
@@ -314,6 +501,13 @@ export const useSip = () => {
             console.warn('[SIP] Nenhuma sessão ativa para encerrar');
         }
 
+        // Limpa referências
+        if (sessionStateRef.current) {
+            console.log('[SIP] Limpando listeners e referências');
+            sessionStateRef.current.listeners.clear();
+            sessionStateRef.current = null;
+        }
+
         setStatus(prev => ({
             ...prev,
             inCall: false,
@@ -327,18 +521,90 @@ export const useSip = () => {
         if (status.incomingCall?.session) {
             const session = status.incomingCall.session;
 
+            console.log('[SIP] Respondendo chamada, session ID:', session?.id);
+            console.log('[SIP] Microfone disponível:', hasMicrophone);
+
+            // Constraints mais robustas para Electron
+            const mediaConstraints: any = {
+                audio: hasMicrophone ? {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } : false,
+                video: false
+            };
+
+            console.log('[SIP] Media constraints para resposta:', mediaConstraints);
+
             session.answer({
-                mediaConstraints: { audio: hasMicrophone, video: false },
+                mediaConstraints: mediaConstraints,
             });
 
-            attachRemoteAudio(session);
+            // IMPORTANTE: Mantém referência forte para evitar garbage collection
+            sessionStateRef.current = {
+                session: session,
+                listeners: new Map()
+            };
 
-            setStatus(prev => ({
-                ...prev,
-                inCall: true,
-                callStatus: 'Em chamada',
-                incomingCall: undefined
-            }));
+            attachRemoteAudio(session);
+            // Adiciona listeners para a sessão de entrada
+            const onConfirmed = () => {
+                console.log('[SIP - Incoming] Evento: confirmed');
+                setStatus(prev => ({
+                    ...prev,
+                    inCall: true,
+                    callStatus: 'Em chamada',
+                    incomingCall: undefined
+                }));
+            };
+
+            const onEnded = (data: any) => {
+                console.log('[SIP - Incoming] Evento: ended', data);
+                sessionStateRef.current = null; // Limpa referência
+                setStatus(prev => ({
+                    ...prev,
+                    inCall: false,
+                    callStatus: 'Chamada encerrada',
+                    incomingCall: undefined
+                }));
+            };
+
+            const onFailed = (e: any) => {
+                console.log('[SIP - Incoming] Evento: failed:', e.cause);
+                sessionStateRef.current = null; // Limpa referência
+                setStatus(prev => ({
+                    ...prev,
+                    inCall: false,
+                    callStatus: 'Chamada falhou: ' + e.cause,
+                    incomingCall: undefined
+                }));
+            };
+
+            const onPeerConnection = (data: any) => {
+                console.log('[SIP - Incoming] Evento: peerconnection');
+                if (data.peerconnection) {
+                    const pc = data.peerconnection;
+                    console.log('[SIP - Incoming] PeerConnection state:', pc.connectionState);
+                    pc.onconnectionstatechange = () => {
+                        console.log('[SIP - Incoming] PeerConnection connectionState:', pc.connectionState);
+                    };
+                }
+            };
+
+            session.on('confirmed', onConfirmed);
+            session.on('ended', onEnded);
+            session.on('failed', onFailed);
+            session.on('peerconnection', onPeerConnection);
+
+            // Armazena listeners
+            if (sessionStateRef.current) {
+                sessionStateRef.current.listeners.set('confirmed', onConfirmed);
+                sessionStateRef.current.listeners.set('ended', onEnded);
+                sessionStateRef.current.listeners.set('failed', onFailed);
+                sessionStateRef.current.listeners.set('peerconnection', onPeerConnection);
+            }
+
+            console.log('[SIP] Listeners de incoming call configurados');
         }
     };
 

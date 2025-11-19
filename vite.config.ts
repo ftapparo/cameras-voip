@@ -12,9 +12,20 @@ export default defineConfig({
       output: {
         manualChunks: undefined
       }
+    },
+    commonjsOptions: {
+      esmExternals: true
     }
   },
   server: {
-    allowedHosts: ['.local', '.condominionovaresidence.com']
+    allowedHosts: ['.local', '.condominionovaresidence.com'],
+    hmr: process.env.NODE_ENV === 'development' ? {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 5173
+    } : undefined
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
   }
 });

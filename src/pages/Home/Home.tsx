@@ -24,9 +24,17 @@ const Home: React.FC = () => {
 
         // Garantir que o elemento audio está no DOM
         const audioElement = remoteAudioRef?.current;
-        if (audioElement && !audioElement.parentElement) {
-            console.warn('[Home] Adicionando elemento audio ao DOM');
-            document.body.appendChild(audioElement);
+        if (audioElement) {
+            if (!audioElement.parentElement) {
+                console.warn('[Home] Adicionando elemento audio ao DOM');
+                document.body.appendChild(audioElement);
+            }
+
+            console.log('[Home] Elemento audio configurado:', {
+                autoplay: audioElement.autoplay,
+                muted: audioElement.muted,
+                parentElement: audioElement.parentElement?.tagName
+            });
         }
     }, [remoteAudioRef]);    // Estado para armazenar as câmeras carregadas da API
     const [cameras, setCameras] = React.useState<Camera[]>([]);
@@ -56,6 +64,7 @@ const Home: React.FC = () => {
     const [voipUrl, setVoipUrl] = React.useState<string | undefined>(undefined);
     const [voipKey, setVoipKey] = React.useState(0);
     const [voipCameraId, setVoipCameraId] = React.useState<number | undefined>(undefined);
+    const [isVoipCameraLoading, setIsVoipCameraLoading] = React.useState(false);
 
     // Estado para controlar chamada ativa (de ramal sem câmera)
     const [activeCallExtension, setActiveCallExtension] = React.useState<string | undefined>(undefined);
@@ -112,9 +121,18 @@ const Home: React.FC = () => {
             return;
         }
 
+        // Bloqueia cliques rápidos enquanto carrega câmera
+        if (isVoipCameraLoading) {
+            console.log('Clique ignorado: câmera ainda está carregando. ID atual:', voipCameraId);
+            return;
+        }
+
         const highDefUrl = getCameraUrl(cameraId, true);
 
         console.log(`Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
+
+        // Marca como carregando
+        setIsVoipCameraLoading(true);
 
         // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
         // Por enquanto, vou colocar sempre na área A
@@ -186,6 +204,19 @@ const Home: React.FC = () => {
             setIsOutgoingCall(false);
         }
     }, [status.incomingCall, status.inCall, cameras, activeCallExtension, voipUrl]);
+
+    // Timeout de segurança para desbloquear loading se ninguém chamar o callback
+    React.useEffect(() => {
+        if (isVoipCameraLoading) {
+            console.log('[Home] VoipCamera marcada como carregando, iniciando timer de 15s');
+            const timer = setTimeout(() => {
+                console.log('[Home] Timeout de carregamento atingido, desbloqueando');
+                setIsVoipCameraLoading(false);
+            }, 15000); // 15 segundos de timeout
+
+            return () => clearTimeout(timer);
+        }
+    }, [isVoipCameraLoading]);
 
     // Tocar som quando receber chamada entrante (phone-ring.mp3)
     React.useEffect(() => {
@@ -311,6 +342,7 @@ const Home: React.FC = () => {
                                 onClick={answerCall}
                                 isIncomingCall={true}
                                 onReject={hangup}
+                                onLoadingComplete={() => setIsVoipCameraLoading(false)}
                             />
                         ) : (
                             // Ramal sem câmera - mostra IncomingCall
@@ -328,6 +360,7 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             isInCall={true}
                             onHangup={safeHangup}
+                            onLoadingComplete={() => setIsVoipCameraLoading(false)}
                         />
                     ) : activeCallExtension ? (
                         // Chamada ativa de ramal sem câmera
@@ -345,6 +378,7 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             isOutgoingCall={true}
                             onHangup={safeHangup}
+                            onLoadingComplete={() => setIsVoipCameraLoading(false)}
                         />
                     ) : voipUrl ? (
                         // Câmera selecionada manualmente (sem chamada)
@@ -353,6 +387,7 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
                             hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
+                            onLoadingComplete={() => setIsVoipCameraLoading(false)}
                         />
                     ) : (
                         // Nenhuma atividade
@@ -412,8 +447,12 @@ const Home: React.FC = () => {
                                 justifyContent: 'stretch',
                                 minWidth: 0,
                                 minHeight: 0,
-                                overflow: 'hidden'
+                                overflow: 'hidden',
+                                opacity: isVoipCameraLoading ? 0.5 : 1,
+                                cursor: isVoipCameraLoading ? 'not-allowed' : 'pointer',
+                                transition: 'opacity 0.3s ease, cursor 0.3s ease'
                             }}
+                            title={isVoipCameraLoading ? 'Câmera carregando. Aguarde para selecionar outra.' : cam.description}
                         >
                             <CameraPlayer wsUrl={getCameraUrl(cam.id)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
                         </Box>
