@@ -174,7 +174,7 @@ const Home: React.FC = () => {
         // Por enquanto, vou colocar sempre na área A
         setVoipUrl(highDefUrl);
         setVoipCameraId(cameraId); // Armazena o ID da câmera atual
-        setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
+        // NÃO incrementa voipKey - mantém o mesmo VoipCamera para evitar remount
     };
 
     // Função para iniciar chamada sainte (outgoing call)
