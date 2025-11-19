@@ -178,6 +178,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     destroyFnRef.current = result.destroy;
                     playerLoadedRef.current = true;
                     console.log("Player carregado com sucesso");
+                    console.log("[VoipCamera] Desbloqueando câmeras...");
                     setIsVoipCameraLoading(false);
                 }
 

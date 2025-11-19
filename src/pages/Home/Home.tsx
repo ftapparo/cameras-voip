@@ -66,7 +66,6 @@ const Home: React.FC = () => {
 
     // Estado para a área VoIP
     const [voipUrl, setVoipUrl] = React.useState<string | undefined>(undefined);
-    const [voipKey, setVoipKey] = React.useState(0);
     const [voipCameraId, setVoipCameraId] = React.useState<number | undefined>(undefined);
 
     // Estado para controlar chamada ativa (de ramal sem câmera)
@@ -143,7 +142,6 @@ const Home: React.FC = () => {
         // Muda a URL e ativa o bloqueio
         setVoipUrl(highDefUrl);
         setVoipCameraId(cameraId);
-        setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
         setIsVoipCameraLoading(true); // ← ATIVA O BLOQUEIO
     };
 
@@ -190,7 +188,6 @@ const Home: React.FC = () => {
                 // Só atualiza se for uma câmera diferente
                 if (voipUrl !== highDefUrl) {
                     setVoipUrl(highDefUrl);
-                    setVoipKey(prev => prev + 1);
                 }
                 setActiveCallExtension(undefined); // Limpa chamada sem câmera se houver
             } else {
@@ -330,7 +327,6 @@ const Home: React.FC = () => {
                         voipUrl ? (
                             // Câmera identificada - mostra VoipCamera com botões Atender/Recusar
                             <VoipCamera
-                                key={voipKey}
                                 wsUrl={voipUrl}
                                 onClick={answerCall}
                                 isIncomingCall={true}
@@ -348,7 +344,6 @@ const Home: React.FC = () => {
                     ) : status.inCall && voipUrl ? (
                         // Chamada ativa com câmera - mostra VoipCamera com botão ENCERRAR
                         <VoipCamera
-                            key={voipKey}
                             wsUrl={voipUrl}
                             isInCall={true}
                             onHangup={safeHangup}
@@ -365,7 +360,6 @@ const Home: React.FC = () => {
                     ) : isOutgoingCall && voipUrl ? (
                         // Chamada sainte em progresso (outgoing call)
                         <VoipCamera
-                            key={voipKey}
                             wsUrl={voipUrl}
                             isOutgoingCall={true}
                             onHangup={safeHangup}
@@ -373,7 +367,6 @@ const Home: React.FC = () => {
                     ) : voipUrl ? (
                         // Câmera selecionada manualmente (sem chamada)
                         <VoipCamera
-                            key={voipKey}
                             wsUrl={voipUrl}
                             onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
                             hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
