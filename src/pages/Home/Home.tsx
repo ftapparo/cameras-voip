@@ -50,16 +50,22 @@ const Home: React.FC = () => {
                 // Limita para as 14 primeiras câmeras
                 setCameras(response.data.cameras.slice(0, 14));
                 setLoading(false);
-                setVoipCameraLoading(false); // Adiciona aqui
+
+                // Timeout de 15 segundos
+                setTimeout(() => {
+                    console.log('[Home] Timeout de 15s atingido ao carregar câmeras');
+                    setVoipCameraLoading(false);
+                }, 15000);
+
             } catch (error) {
                 console.error('Erro ao carregar câmeras:', error);
                 setLoading(false);
-                setVoipCameraLoading(false); // Também no catch
+                setVoipCameraLoading(false);
             }
         };
 
         fetchCameras();
-    }, []);
+    }, [setVoipCameraLoading]);
 
     // Estado para controlar quantas câmeras estão visíveis
     const [visibleCount, setVisibleCount] = React.useState(1);
