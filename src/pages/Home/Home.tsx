@@ -19,13 +19,7 @@ const Home: React.FC = () => {
     const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip();
 
     // Context para bloqueio de câmeras durante carregamento
-    const { isVoipCameraLoading, setIsVoipCameraLoading } = useVoipCamera();
-
-    React.useEffect(() => {
-        console.log('[Home] isVoipCameraLoading mudou:', isVoipCameraLoading);
-    }, [isVoipCameraLoading]);
-
-    // Debug: log quando o ref é criado
+    const { isVoipCameraLoading, setIsVoipCameraLoading } = useVoipCamera();    // Debug: log quando o ref é criado
     React.useEffect(() => {
         console.log('[Home] remoteAudioRef:', remoteAudioRef);
         console.log('[Home] remoteAudioRef.current:', remoteAudioRef?.current);
@@ -116,7 +110,7 @@ const Home: React.FC = () => {
     // Monitora quando o carregamento da câmera termina
     React.useEffect(() => {
         if (!isVoipCameraLoading && voipUrl) {
-            console.log('[Home] Câmera carregou, liberando bloqueio');
+            console.log('[Home] Câmera carregada');
         }
     }, [isVoipCameraLoading, voipUrl]);
 
