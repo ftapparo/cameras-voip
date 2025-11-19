@@ -227,46 +227,70 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                     </Button>
                 )}
 
-                {/* Fullscreen */}
-                <IconButton
-                    onClick={handleToggleFullscreen}
-                    title={isFullscreen ? 'Sair de tela cheia' : 'Entrar em tela cheia'}
-                    sx={{
-                        color: 'white',
-                        '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    }}
-                >
-                    {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    {/* Fullscreen */}
+                    <IconButton
+                        onClick={handleToggleFullscreen}
+                        title={isFullscreen ? 'Sair de tela cheia' : 'Entrar em tela cheia'}
+                        sx={{
+                            color: 'white',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }}
+                    >
+                        {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                    </IconButton>
 
-                {/* Configurações */}
-                <IconButton
-                    onClick={() => setConfigOpen(true)}
-                    sx={{
-                        color: 'white',
-                        '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    }}
-                >
-                    <SettingsIcon />
-                </IconButton>
+                    {/* Divisor */}
+                    <Box
+                        sx={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            mx: 0.5,
+                            fontSize: '1.2rem'
+                        }}
+                    >
+                        |
+                    </Box>
 
-                {/* DevTools */}
-                <IconButton
-                    onClick={handleOpenDevTools}
-                    title="Abrir DevTools"
-                    sx={{
-                        color: 'white',
-                        '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    }}
-                >
-                    <MoreVertIcon />
-                </IconButton>
+                    {/* Configurações */}
+                    <IconButton
+                        onClick={() => setConfigOpen(true)}
+                        sx={{
+                            color: 'white',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }}
+                    >
+                        <SettingsIcon />
+                    </IconButton>
+
+                    {/* Divisor */}
+                    <Box
+                        sx={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            mx: 0.5,
+                            fontSize: '1.2rem'
+                        }}
+                    >
+                        |
+                    </Box>
+
+                    {/* DevTools */}
+                    <IconButton
+                        onClick={handleOpenDevTools}
+                        title="Abrir DevTools"
+                        sx={{
+                            color: 'white',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }}
+                    >
+                        <MoreVertIcon />
+                    </IconButton>
+                </Box>
             </Box>
 
             {/* Dialog de Configuração */}
