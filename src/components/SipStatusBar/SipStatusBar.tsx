@@ -241,6 +241,19 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                     {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
                 </IconButton>
 
+                {/* Configurações */}
+                <IconButton
+                    onClick={() => setConfigOpen(true)}
+                    sx={{
+                        color: 'white',
+                        '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }}
+                >
+                    <SettingsIcon />
+                </IconButton>
+
                 {/* DevTools */}
                 <IconButton
                     onClick={handleOpenDevTools}
@@ -253,19 +266,6 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                     }}
                 >
                     <MoreVertIcon />
-                </IconButton>
-
-                {/* Configurações */}
-                <IconButton
-                    onClick={() => setConfigOpen(true)}
-                    sx={{
-                        color: 'white',
-                        '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    }}
-                >
-                    <SettingsIcon />
                 </IconButton>
             </Box>
 
