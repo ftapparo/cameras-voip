@@ -85,6 +85,24 @@ const Home: React.FC = () => {
         setIsVoipCameraLoading(false);
     }, []);
 
+    // Timeout de 10 segundos para desbloquear câmeras automaticamente
+    React.useEffect(() => {
+        if (!isVoipCameraLoading) {
+            return;
+        }
+
+        console.log('[Home] Iniciando timeout de 10s para desbloquear câmeras');
+
+        const timeoutId = setTimeout(() => {
+            console.log('[Home] Timeout de 10s atingido, desbloqueando câmeras');
+            setIsVoipCameraLoading(false);
+        }, 10000); // 10 segundos
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [isVoipCameraLoading]);
+
     // Wrapper seguro para hangup
     const safeHangup = React.useCallback(() => {
         if (isHangingUpRef.current) {
