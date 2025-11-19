@@ -84,9 +84,8 @@ const Home: React.FC = () => {
     // Callback para quando o VoipCamera termina de carregar
     const handleVoipCameraLoadingComplete = React.useCallback(() => {
         console.log('[Home] VoipCamera carregamento completo, desbloqueando');
-        setVoipCameraLoading(false);
         setIsVoipCameraLoading(false);
-    }, [setVoipCameraLoading]);
+    }, []);
 
     // Wrapper seguro para hangup
     const safeHangup = React.useCallback(() => {

@@ -2,6 +2,7 @@ import { Box, Chip, CircularProgress, IconButton } from '@mui/material';
 import { useRef, useEffect, useState } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CallEndIcon from '@mui/icons-material/CallEnd';
+import { useVoipCamera } from '../../contexts/VoipCameraContext';
 
 interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
     wsUrl?: string;
@@ -22,6 +23,7 @@ interface PlayerWithDestroy {
 }
 
 export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
+    const { setVoipCameraLoading } = useVoipCamera();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -198,6 +200,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     destroyFnRef.current = result.destroy;
                     playerLoadedRef.current = true;
                     console.log("Player carregado com sucesso");
+                    setVoipCameraLoading(false);
                 }
 
                 // Timeout de segurança
