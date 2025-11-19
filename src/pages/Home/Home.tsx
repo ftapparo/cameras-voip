@@ -5,6 +5,7 @@ import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
 import { IncomingCall } from '../../components/IncomingCall/IncomingCall';
 import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
 import { useSip } from '../../hooks/useSip';
+import { useVoipCamera } from '../../contexts/useVoipCamera';
 import { Box, Typography } from '@mui/material';
 
 interface Camera {
@@ -16,6 +17,9 @@ interface Camera {
 const Home: React.FC = () => {
     // Hook SIP
     const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip();
+
+    // Context para bloqueio de câmeras durante carregamento
+    const { isVoipCameraLoading, setIsVoipCameraLoading } = useVoipCamera();
 
     // Debug: log quando o ref é criado
     React.useEffect(() => {
@@ -78,12 +82,6 @@ const Home: React.FC = () => {
     // Ref para prevenir múltiplos hangups simultâneos
     const isHangingUpRef = React.useRef(false);
 
-    // Callback para liberar câmeras quando player carrega
-    const handleVoipCameraLoadingComplete = React.useCallback(() => {
-        console.log('[Home] Player carregado, liberando câmeras');
-        setVoipUrl(undefined);
-    }, []);
-
     // Wrapper seguro para hangup
     const safeHangup = React.useCallback(() => {
         if (isHangingUpRef.current) {
@@ -120,6 +118,12 @@ const Home: React.FC = () => {
 
     // Função para lidar com o clique em uma câmera pequena
     const handleCameraClick = (cameraId: number) => {
+        // Bloqueia se há carregamento de câmera em curso
+        if (isVoipCameraLoading) {
+            console.log('[Home] 🔒 Câmera em carregamento, clique bloqueado');
+            return;
+        }
+
         // Bloqueia se já há uma câmera em exibição (igual como faz com chamadas)
         if (voipUrl) {
             console.log('[Home] Câmera já em exibição, clique bloqueado');
@@ -136,10 +140,11 @@ const Home: React.FC = () => {
 
         console.log(`[Home] Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
 
-        // Muda a URL
+        // Muda a URL e ativa o bloqueio
         setVoipUrl(highDefUrl);
         setVoipCameraId(cameraId);
         setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
+        setIsVoipCameraLoading(true); // ← ATIVA O BLOQUEIO
     };
 
     // Função para iniciar chamada sainte (outgoing call)
@@ -372,7 +377,6 @@ const Home: React.FC = () => {
                             wsUrl={voipUrl}
                             onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
                             hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
-                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : (
                         // Nenhuma atividade
@@ -433,11 +437,11 @@ const Home: React.FC = () => {
                                 minWidth: 0,
                                 minHeight: 0,
                                 overflow: 'hidden',
-                                opacity: voipUrl ? 0.5 : 1,
-                                cursor: voipUrl ? 'not-allowed' : 'pointer',
+                                opacity: (voipUrl || isVoipCameraLoading) ? 0.5 : 1,
+                                cursor: (voipUrl || isVoipCameraLoading) ? 'not-allowed' : 'pointer',
                                 transition: 'opacity 0.3s ease, cursor 0.3s ease'
                             }}
-                            title={voipUrl ? 'Câmera em uso. Feche para selecionar outra.' : cam.description}
+                            title={(voipUrl || isVoipCameraLoading) ? (isVoipCameraLoading ? '⏳ Câmera carregando...' : 'Câmera em uso. Feche para selecionar outra.') : cam.description}
                         >
                             <CameraPlayer wsUrl={getCameraUrl(cam.id)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
                         </Box>

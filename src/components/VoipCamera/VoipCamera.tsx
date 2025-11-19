@@ -2,6 +2,7 @@ import { Box, Chip, CircularProgress, IconButton } from '@mui/material';
 import { useRef, useEffect, useState } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CallEndIcon from '@mui/icons-material/CallEnd';
+import { useVoipCamera } from '../../contexts/useVoipCamera';
 
 interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
     wsUrl?: string;
@@ -12,7 +13,6 @@ interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> 
     onReject?: () => void;
     onHangup?: () => void;
     hasVoip?: boolean; // Indica se a câmera tem funcionalidade VoIP
-    onLoadingComplete?: () => void; // Callback quando o carregamento termina
 }
 
 interface PlayerWithDestroy {
@@ -21,7 +21,8 @@ interface PlayerWithDestroy {
     destroy: () => void;
 }
 
-export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
+export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, ...rest }: VoipCameraProps) => {
+    const { setIsVoipCameraLoading } = useVoipCamera();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -31,7 +32,6 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
     const [retryCount, setRetryCount] = useState(0);
     const retryTimeoutRef = useRef<number | null>(null);
     const loadSuccessRef = useRef(false);
-    const callbackCalledRef = useRef(false);
     const MAX_RETRIES = 3;
 
 
@@ -60,30 +60,6 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             resizeObserver.disconnect();
         };
     }, []);
-
-    // Callback quando o carregamento é concluído
-    useEffect(() => {
-        console.log('[VoipCamera] Verificando loading:', {
-            isLoading,
-            temCallback: !!onLoadingComplete,
-            wsUrl,
-            callbackCalled: callbackCalledRef.current
-        });
-
-        if (!isLoading && onLoadingComplete && !callbackCalledRef.current) {
-            console.log('[VoipCamera] Carregamento concluído, chamando callback');
-            callbackCalledRef.current = true;
-            onLoadingComplete();
-        }
-    }, [isLoading, onLoadingComplete, wsUrl]);
-
-    // Reseta a flag quando uma nova URL começa a carregar
-    useEffect(() => {
-        if (isLoading) {
-            console.log('[VoipCamera] Nova carga iniciada, resetando flag de callback');
-            callbackCalledRef.current = false;
-        }
-    }, [isLoading]);
 
     useEffect(() => {
 
@@ -119,12 +95,6 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             } else {
                 console.error(`[VoIP ${wsUrl}] Falha após ${MAX_RETRIES} tentativas`);
                 setIsLoading(false);
-
-                // Força callback mesmo após falha
-                if (onLoadingComplete) {
-                    console.log('[VoipCamera] Carregamento falhou, chamando callback');
-                    onLoadingComplete();
-                }
             }
         };
 
@@ -208,12 +178,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     destroyFnRef.current = result.destroy;
                     playerLoadedRef.current = true;
                     console.log("Player carregado com sucesso");
-
-                    // Libera câmeras imediatamente quando player carrega
-                    if (onLoadingComplete) {
-                        console.log("[VoipCamera] Liberando bloqueio de câmeras");
-                        onLoadingComplete();
-                    }
+                    setIsVoipCameraLoading(false);
                 }
 
                 // Timeout de segurança
@@ -282,24 +247,7 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 destroyFnRef.current = null;
             }
         };
-    }, [wsUrl, retryCount, MAX_RETRIES]);
-
-    // Efeito para chamar callback quando carregamento completa
-    useEffect(() => {
-        // Se não está mais carregando e o callback não foi chamado
-        if (!isLoading && !callbackCalledRef.current && onLoadingComplete) {
-            console.log('[VoipCamera] Carregamento concluído, chamando callback');
-            callbackCalledRef.current = true;
-            onLoadingComplete();
-        }
-    }, [isLoading, onLoadingComplete]);
-
-    // Reseta a flag quando uma nova URL começa a carregar
-    useEffect(() => {
-        if (isLoading) {
-            callbackCalledRef.current = false;
-        }
-    }, [isLoading]);
+    }, [wsUrl, retryCount, MAX_RETRIES, setIsVoipCameraLoading]);
 
     return (
         <Box
