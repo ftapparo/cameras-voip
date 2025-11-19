@@ -85,6 +85,14 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
         }
     }, [isLoading]);
 
+    // Reseta a flag quando wsUrl muda (nova câmera selecionada)
+    useEffect(() => {
+        console.log('[VoipCamera] wsUrl mudou:', wsUrl);
+        console.log('[VoipCamera] Resetando callbackCalledRef');
+        callbackCalledRef.current = false;
+        setIsLoading(true); // Marca como carregando quando URL muda
+    }, [wsUrl]);
+
     useEffect(() => {
 
         console.log(`Carregando VoipCamera com URL: ${wsUrl}`);

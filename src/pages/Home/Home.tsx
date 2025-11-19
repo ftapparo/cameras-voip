@@ -162,19 +162,24 @@ const Home: React.FC = () => {
             return;
         }
 
+        // Se a câmera clicada é a mesma que está carregando, ignora
+        if (voipCameraId === cameraId && isVoipCameraLoading) {
+            console.log('[Home] ❌ Mesma câmera já está carregando');
+            return;
+        }
+
         const highDefUrl = getCameraUrl(cameraId, true);
 
         console.log(`[Home] ✅ Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
 
-        // Marca como carregando
+        // Marca como carregando ANTES de mudar a URL
         setIsVoipCameraLoading(true);
         console.log('[Home] ✅ isVoipCameraLoading definido como TRUE');
+        console.log('[Home] 🔒 Bloqueio ATIVADO - nenhuma câmera pode ser clicada até carregamento completar');
 
-        // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
-        // Por enquanto, vou colocar sempre na área A
+        // Muda a URL (isso vai disparar o carregamento no VoipCamera)
         setVoipUrl(highDefUrl);
         setVoipCameraId(cameraId); // Armazena o ID da câmera atual
-        // NÃO incrementa voipKey - mantém o mesmo VoipCamera para evitar remount
     };
 
     // Função para iniciar chamada sainte (outgoing call)
