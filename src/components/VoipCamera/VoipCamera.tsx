@@ -23,6 +23,11 @@ interface PlayerWithDestroy {
 
 export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, ...rest }: VoipCameraProps) => {
     const { setIsVoipCameraLoading } = useVoipCamera();
+
+    useEffect(() => {
+        console.log('[VoipCamera] Hook useVoipCamera carregou, setIsVoipCameraLoading:', typeof setIsVoipCameraLoading);
+    }, [setIsVoipCameraLoading]);
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const playerLoadedRef = useRef(false);
@@ -248,7 +253,8 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                 destroyFnRef.current = null;
             }
         };
-    }, [wsUrl, retryCount, MAX_RETRIES, setIsVoipCameraLoading]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [wsUrl, retryCount, MAX_RETRIES]);
 
     return (
         <Box
