@@ -5,6 +5,7 @@ import CallEndIcon from '@mui/icons-material/CallEnd';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import Hls from 'hls.js';
 
 interface VoipCameraProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
     hlsUrl?: string;
@@ -22,6 +23,7 @@ interface VoipCameraProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
 export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, callConfirmed = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
+    const hlsRef = useRef<Hls | null>(null);
     const [isHovering, setIsHovering] = useState(false);
     const [isHoveringCenter, setIsHoveringCenter] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -51,82 +53,98 @@ export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall =
     // State derivado: loading quando há URL mas vídeo não carregou
     const isLoading = Boolean(hlsUrl && !loadingState.loaded);
 
+    // Configuração HLS.js
     useEffect(() => {
         const video = videoRef.current;
-        if (!video) return;
-        
-        const onLoadedData = () => {
-            setLoadingState(prev => ({ ...prev, loaded: true }));
-            setRetryState({ isRetrying: false, lastError: null }); // Reset retry ao carregar com sucesso
-            if (onLoadingComplete) {
-                onLoadingComplete();
-            }
-        };
-        
-        const onError = (event: Event) => {
-            // Detecta erro de rede (404, conexão perdida, etc.)
-            const target = event.target as HTMLVideoElement;
-            const error = target.error;
+        if (!video || !hlsUrl) return;
+
+        // Limpa instância anterior do HLS
+        if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+        }
+
+        if (Hls.isSupported()) {
+            console.log('[VoipCamera] Usando HLS.js para:', hlsUrl);
+            const hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 90
+            });
             
-            let shouldRetry = false;
-            let errorMessage = 'Erro desconhecido';
+            hlsRef.current = hls;
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
             
-            if (error) {
-                switch (error.code) {
-                    case MediaError.MEDIA_ERR_NETWORK:
-                        errorMessage = 'Erro de rede (404/conexão perdida)';
-                        shouldRetry = true;
-                        break;
-                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                        errorMessage = 'Formato não suportado';
-                        shouldRetry = true;
-                        break;
-                    case MediaError.MEDIA_ERR_DECODE:
-                        errorMessage = 'Erro de decodificação';
-                        shouldRetry = true;
-                        break;
-                    case MediaError.MEDIA_ERR_ABORTED:
-                        errorMessage = 'Reprodução abortada';
-                        shouldRetry = false; // Não tenta retry em abort
-                        break;
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                console.log('[VoipCamera] HLS manifest carregado');
+                setLoadingState(prev => ({ ...prev, loaded: true }));
+                setRetryState({ isRetrying: false, lastError: null });
+                if (onLoadingComplete) {
+                    onLoadingComplete();
                 }
-            }
+            });
             
-            setLoadingState(prev => ({ ...prev, loaded: true })); // Para esconder o loading mesmo com erro
-            
-            if (shouldRetry) {
-                console.log(`[VoipCamera] ${errorMessage} - Retry em 5s: ${hlsUrl?.split('/').pop() || 'N/A'}`);
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                console.error('[VoipCamera] Erro HLS:', data);
+                setLoadingState(prev => ({ ...prev, loaded: true })); // Para esconder loading
                 
-                setRetryState({
-                    isRetrying: true,
-                    lastError: errorMessage
-                });
+                if (data.fatal) {
+                    setRetryState({ isRetrying: true, lastError: `HLS Error: ${data.type}` });
+                    // Retry após 5 segundos
+                    setTimeout(() => {
+                        hls.loadSource(hlsUrl);
+                    }, 5000);
+                }
                 
-                // Retry após 5 segundos
-                setTimeout(() => {
-                    if (video && hlsUrl) {
-                        video.load(); // Força reload do vídeo
-                    }
-                }, 5000);
-            } else {
-                console.warn(`[VoipCamera] ${errorMessage} (sem retry): ${hlsUrl?.split('/').pop() || 'N/A'}`);
-                setRetryState({ 
-                    isRetrying: false, 
-                    lastError: errorMessage 
-                });
-            }
+                if (onLoadingComplete) {
+                    onLoadingComplete();
+                }
+            });
             
-            if (onLoadingComplete) {
-                onLoadingComplete();
-            }
-        };
-        
-        video.addEventListener('loadeddata', onLoadedData);
-        video.addEventListener('error', onError);
-        
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            console.log('[VoipCamera] Usando HLS nativo para:', hlsUrl);
+            video.src = hlsUrl;
+            
+            const onLoadedData = () => {
+                setLoadingState(prev => ({ ...prev, loaded: true }));
+                setRetryState({ isRetrying: false, lastError: null });
+                if (onLoadingComplete) {
+                    onLoadingComplete();
+                }
+            };
+            
+            const onError = () => {
+                setLoadingState(prev => ({ ...prev, loaded: true }));
+                setRetryState({ isRetrying: false, lastError: 'Erro de carregamento' });
+                if (onLoadingComplete) {
+                    onLoadingComplete();
+                }
+            };
+            
+            video.addEventListener('loadeddata', onLoadedData);
+            video.addEventListener('error', onError);
+            
+            return () => {
+                video.removeEventListener('loadeddata', onLoadedData);
+                video.removeEventListener('error', onError);
+            };
+        } else {
+            console.warn('[VoipCamera] HLS não suportado');
+            setTimeout(() => {
+                setLoadingState(prev => ({ ...prev, loaded: true }));
+                setRetryState({ isRetrying: false, lastError: 'HLS não suportado' });
+                if (onLoadingComplete) {
+                    onLoadingComplete();
+                }
+            }, 0);
+        }
+
         return () => {
-            video.removeEventListener('loadeddata', onLoadedData);
-            video.removeEventListener('error', onError);
+            if (hlsRef.current) {
+                hlsRef.current.destroy();
+                hlsRef.current = null;
+            }
         };
     }, [onLoadingComplete, hlsUrl]);
 
@@ -185,11 +203,12 @@ export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall =
         >
             <video
                 ref={videoRef}
-                src={hlsUrl}
                 controls={false}
                 autoPlay
                 muted
                 playsInline
+                preload="metadata"
+                crossOrigin="anonymous"
                 style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
                 {...rest}
             />

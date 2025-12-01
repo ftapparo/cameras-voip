@@ -92,19 +92,43 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
     };
 
     const handleOpenDevTools = () => {
-        const electron = (window as unknown as { electron?: { ipcRenderer?: { send: (channel: string) => void } } }).electron;
-        if (electron?.ipcRenderer?.send) {
-            electron.ipcRenderer.send('toggle-devtools');
-        } else {
-            console.log('Abrindo DevTools via Ctrl+Shift+I');
-            // Fallback para browsers
-            const devToolsKey = new KeyboardEvent('keydown', {
-                key: 'I',
-                code: 'KeyI',
-                ctrlKey: true,
-                shiftKey: true
+        console.log('[DevTools] Tentando abrir DevTools...');
+        
+        try {
+            // Verifica se estamos no Electron
+            const electronWindow = window as unknown as { 
+                electron?: { 
+                    ipcRenderer?: { 
+                        send: (channel: string) => void 
+                    } 
+                } 
+            };
+            
+            if (electronWindow.electron?.ipcRenderer?.send) {
+                console.log('[DevTools] Usando IPC do Electron');
+                electronWindow.electron.ipcRenderer.send('toggle-devtools');
+                return;
+            }
+        } catch (error) {
+            console.warn('[DevTools] Erro ao tentar IPC:', error);
+        }
+        
+        // Fallback: usar atalho F12
+        console.log('[DevTools] Usando atalho F12');
+        try {
+            const f12Event = new KeyboardEvent('keydown', {
+                key: 'F12',
+                code: 'F12',
+                keyCode: 123,
+                bubbles: true,
+                cancelable: true
             });
-            document.dispatchEvent(devToolsKey);
+            document.dispatchEvent(f12Event);
+            
+            // Também tenta no window
+            window.dispatchEvent(f12Event);
+        } catch (error) {
+            console.warn('[DevTools] Erro ao usar F12:', error);
         }
     };
 

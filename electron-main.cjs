@@ -11,7 +11,10 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false, // Permite acesso a conteúdo de outras origens (necessário para HLS)
+      allowRunningInsecureContent: true, // Permite conteúdo HTTP em contexto HTTPS
+      experimentalFeatures: true // Habilita recursos experimentais do Chromium
     },
   });
 
@@ -52,6 +55,18 @@ ipcMain.on('toggle-devtools', (event) => {
 
 app.whenReady().then(() => {
   console.log('[Electron] App pronto, criando janela');
+  
+  // Configura argumentos do Chromium para melhor suporte a vídeo/streaming
+  app.commandLine.appendSwitch('--disable-web-security');
+  app.commandLine.appendSwitch('--disable-features', 'VizDisplayCompositor');
+  app.commandLine.appendSwitch('--enable-experimental-web-platform-features');
+  app.commandLine.appendSwitch('--autoplay-policy', 'no-user-gesture-required');
+  app.commandLine.appendSwitch('--disable-background-timer-throttling');
+  app.commandLine.appendSwitch('--disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('--ignore-certificate-errors');
+  app.commandLine.appendSwitch('--allow-running-insecure-content');
+  app.commandLine.appendSwitch('--disable-site-isolation-trials');
+  
   createWindow();
 
   app.on('activate', function () {

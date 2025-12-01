@@ -1,6 +1,7 @@
 import { Box } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useRef, useEffect, useState } from 'react';
+import Hls from 'hls.js';
 
 interface CameraPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
     hlsUrl: string;
@@ -9,6 +10,7 @@ interface CameraPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> 
 export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
+    const hlsRef = useRef<Hls | null>(null);
     
     // Estado para controle de retry
     const [retryState, setRetryState] = useState({ 
@@ -16,79 +18,59 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
         lastError: null as string | null 
     });
 
-    // Sistema de retry para erros de rede
+    // Configuração HLS.js
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
-        
-        const onLoadedData = () => {
-            setRetryState({ isRetrying: false, lastError: null }); // Reset retry ao carregar com sucesso
-        };
-        
-        const onError = (event: Event) => {
-            // Detecta erro de rede (404, conexão perdida, etc.)
-            const target = event.target as HTMLVideoElement;
-            const error = target.error;
+
+        // Limpa instância anterior do HLS
+        if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+        }
+
+        if (Hls.isSupported()) {
+            console.log('[CameraPlayer] Usando HLS.js para:', hlsUrl);
+            const hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 90
+            });
             
-            let shouldRetry = false;
-            let errorMessage = 'Erro desconhecido';
+            hlsRef.current = hls;
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
             
-            if (error) {
-                switch (error.code) {
-                    case MediaError.MEDIA_ERR_NETWORK:
-                        errorMessage = 'Erro de rede (404/conexão perdida)';
-                        shouldRetry = true;
-                        break;
-                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                        errorMessage = 'Formato não suportado';
-                        shouldRetry = true;
-                        break;
-                    case MediaError.MEDIA_ERR_DECODE:
-                        errorMessage = 'Erro de decodificação';
-                        shouldRetry = true;
-                        break;
-                    case MediaError.MEDIA_ERR_ABORTED:
-                        errorMessage = 'Reprodução abortada';
-                        shouldRetry = false; // Não tenta retry em abort
-                        break;
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                console.log('[CameraPlayer] HLS manifest carregado');
+                setRetryState({ isRetrying: false, lastError: null });
+            });
+            
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                console.error('[CameraPlayer] Erro HLS:', data);
+                if (data.fatal) {
+                    setRetryState({ isRetrying: true, lastError: `HLS Error: ${data.type}` });
+                    // Retry após 5 segundos
+                    setTimeout(() => {
+                        hls.loadSource(hlsUrl);
+                    }, 5000);
                 }
-            }
+            });
             
-            if (shouldRetry) {
-                console.log(`[CameraPlayer] ${errorMessage} - Retry em 5s: ${hlsUrl.split('/').pop()}`);
-                
-                setRetryState({
-                    isRetrying: true,
-                    lastError: errorMessage
-                });
-                
-                // Retry após 5 segundos
-                setTimeout(() => {
-                    if (video && hlsUrl) {
-                        video.load(); // Força reload do vídeo
-                    }
-                }, 5000);
-            } else {
-                console.warn(`[CameraPlayer] ${errorMessage} (sem retry): ${hlsUrl.split('/').pop()}`);
-                setRetryState({ 
-                    isRetrying: false, 
-                    lastError: errorMessage 
-                });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            console.log('[CameraPlayer] Usando HLS nativo para:', hlsUrl);
+            video.src = hlsUrl;
+        } else {
+            console.warn('[CameraPlayer] HLS não suportado');
+            setRetryState({ isRetrying: false, lastError: 'HLS não suportado' });
+        }
+
+        return () => {
+            if (hlsRef.current) {
+                hlsRef.current.destroy();
+                hlsRef.current = null;
             }
         };
-        
-        video.addEventListener('loadeddata', onLoadedData);
-        video.addEventListener('error', onError);
-        
-        return () => {
-            video.removeEventListener('loadeddata', onLoadedData);
-            video.removeEventListener('error', onError);
-        };
-    }, [hlsUrl]);
-    
-    // Reset retry state quando URL muda
-    useEffect(() => {
-        setRetryState({ isRetrying: false, lastError: null });
     }, [hlsUrl]);
 
     return (
@@ -118,11 +100,12 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
         >
             <video
                 ref={videoRef}
-                src={hlsUrl}
                 controls={false}
                 autoPlay
                 muted
                 playsInline
+                preload="metadata"
+                crossOrigin="anonymous"
                 style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
                 {...rest}
             />
