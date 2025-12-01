@@ -34,7 +34,16 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
             const hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: true,
-                backBufferLength: 90
+                backBufferLength: 30, // Reduzido para menos buffer
+                maxBufferLength: 60, // Buffer máximo menor
+                maxMaxBufferLength: 90, // Buffer máximo absoluto menor
+                startLevel: -1, // Autoselect quality mais rápido
+                maxLoadingDelay: 1000, // Delay máximo de carregamento reduzido
+                manifestLoadingTimeOut: 5000, // Timeout do manifest reduzido
+                fragLoadingTimeOut: 10000, // Timeout de fragmento reduzido
+                liveSyncDuration: 2, // Sincronização mais agressiva
+                liveMaxLatencyDuration: 5, // Latência máxima reduzida
+                progressive: true // Habilita carregamento progressivo
             });
             
             hlsRef.current = hls;
@@ -43,6 +52,17 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
             
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 console.log('[CameraPlayer] HLS manifest carregado');
+                // Não marca como loaded aqui, espera pelos dados
+            });
+
+            // Esconde loading quando primeiro fragmento começar a carregar
+            hls.on(Hls.Events.FRAG_LOADING, () => {
+                console.log('[CameraPlayer] Carregando primeiro fragmento');
+                setRetryState({ isRetrying: false, lastError: null });
+            });
+
+            // Fallback: sucesso quando dados estão prontos
+            hls.on(Hls.Events.FRAG_LOADED, () => {
                 setRetryState({ isRetrying: false, lastError: null });
             });
             
