@@ -1,4 +1,4 @@
-import { Box, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
+import { Box, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Badge } from '@mui/material';
 import { useState, useEffect } from 'react';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PhoneIcon from '@mui/icons-material/Phone';
@@ -6,6 +6,9 @@ import PhoneDisabledIcon from '@mui/icons-material/PhoneDisabled';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import HistoryIcon from '@mui/icons-material/History';
+import { useCallHistory } from '../../contexts/CallHistoryContext';
+import { CallHistoryModal } from '../CallHistoryModal/CallHistoryModal';
 interface SipConfig {
     websocket: string;
     uri: string;
@@ -24,6 +27,9 @@ const SIP_CONFIG_KEY = 'sip_config';
 export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSave }: SipStatusBarProps) => {
     const [configOpen, setConfigOpen] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    
+    const { missedCallsCount } = useCallHistory();
 
     // Carrega configuração do localStorage
     const loadSavedConfig = (): SipConfig => {
@@ -171,6 +177,8 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                     <IconButton
                         onClick={handleToggleFullscreen}
                         title={isFullscreen ? 'Sair de tela cheia' : 'Entrar em tela cheia'}
+                        onFocus={(e) => e.target.blur()}
+                        tabIndex={-1}
                         sx={{
                             color: 'white',
                             '&:hover': {
@@ -192,9 +200,73 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                         |
                     </Box>
 
+                    {/* Botão de Limpeza de Emergência - OCULTO TEMPORARIAMENTE */}
+                    {/* <Tooltip title="Limpar Chamadas Presas no Servidor (Emergência)">
+                        <IconButton
+                            onClick={() => onForceCleanup?.()}
+                            onFocus={(e) => e.target.blur()}
+                            tabIndex={-1}
+                            sx={{
+                                color: 'orange',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                                    color: 'red'
+                                }
+                            }}
+                        >
+                            <CleaningServicesIcon />
+                        </IconButton>
+                    </Tooltip> */}
+
+                    {/* Divisor */}
+                    {/* <Box
+                        sx={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            mx: 0.5,
+                            fontSize: '1.2rem'
+                        }}
+                    >
+                        |
+                    </Box> */}
+
+                    {/* Histórico de Chamadas */}
+                    <IconButton
+                        onClick={() => setHistoryOpen(true)}
+                        title="Histórico de Chamadas"
+                        onFocus={(e) => e.target.blur()}
+                        tabIndex={-1}
+                        sx={{
+                            color: 'white',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }}
+                    >
+                        <Badge 
+                            badgeContent={missedCallsCount > 0 ? missedCallsCount : undefined}
+                            color="error"
+                            max={99}
+                        >
+                            <HistoryIcon />
+                        </Badge>
+                    </IconButton>
+
+                    {/* Divisor */}
+                    <Box
+                        sx={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            mx: 0.5,
+                            fontSize: '1.2rem'
+                        }}
+                    >
+                        |
+                    </Box>
+
                     {/* Configurações */}
                     <IconButton
                         onClick={() => setConfigOpen(true)}
+                        onFocus={(e) => e.target.blur()}
+                        tabIndex={-1}
                         sx={{
                             color: 'white',
                             '&:hover': {
@@ -220,6 +292,8 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                     <IconButton
                         onClick={handleOpenDevTools}
                         title="Abrir DevTools"
+                        onFocus={(e) => e.target.blur()}
+                        tabIndex={-1}
                         sx={{
                             color: 'white',
                             '&:hover': {
@@ -304,6 +378,12 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Modal de Histórico de Chamadas */}
+            <CallHistoryModal
+                open={historyOpen}
+                onClose={() => setHistoryOpen(false)}
+            />
         </>
     );
 };

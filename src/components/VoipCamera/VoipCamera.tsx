@@ -2,303 +2,149 @@ import { Box, Chip, CircularProgress, IconButton } from '@mui/material';
 import { useRef, useEffect, useState } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CallEndIcon from '@mui/icons-material/CallEnd';
-import { useVoipCamera } from '../../contexts/VoipCameraContext';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-interface VoipCameraProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
-    wsUrl?: string;
+interface VoipCameraProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
+    hlsUrl?: string;
     onClick?: () => void;
     isIncomingCall?: boolean;
     isInCall?: boolean;
     isOutgoingCall?: boolean;
+    callConfirmed?: boolean; // Indica se a chamada foi confirmada/estabelecida
     onReject?: () => void;
     onHangup?: () => void;
     hasVoip?: boolean; // Indica se a câmera tem funcionalidade VoIP
     onLoadingComplete?: () => void; // Callback quando o carregamento termina
 }
 
-interface PlayerWithDestroy {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    player: any;
-    destroy: () => void;
-}
-
-export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
-    const { setVoipCameraLoading } = useVoipCamera();
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, callConfirmed = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
+    const videoRef = useRef<HTMLVideoElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
-    const playerLoadedRef = useRef(false);
-    const destroyFnRef = useRef<(() => void) | null>(null);
     const [isHovering, setIsHovering] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [retryCount, setRetryCount] = useState(0);
-    const retryTimeoutRef = useRef<number | null>(null);
-    const loadSuccessRef = useRef(false);
-    const callbackCalledRef = useRef(false);
-    const MAX_RETRIES = 3;
+    const [isHoveringCenter, setIsHoveringCenter] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    
+    // Estado de loading baseado na URL - resetado quando URL muda
+    const [loadingState, setLoadingState] = useState({ url: hlsUrl, loaded: false });
+    
+    // Estado para controle de retry
+    const [retryState, setRetryState] = useState({ 
+        isRetrying: false, 
+        lastError: null as string | null 
+    });
+    
+    // Se URL mudou, resetar estado
+    if (loadingState.url !== hlsUrl) {
+        setLoadingState({ url: hlsUrl, loaded: false });
+        setRetryState({ isRetrying: false, lastError: null });
+    }
 
-
-    // Força o redimensionamento do canvas
-    const forceCanvasResize = () => {
-        if (!canvasRef.current || !boxRef.current || !playerLoadedRef.current) return;
-
-        const { clientWidth, clientHeight } = boxRef.current;
-
-        // Força via style inline para sobrescrever qualquer estilo aplicado pelo script
-        canvasRef.current.style.width = `${clientWidth}px`;
-        canvasRef.current.style.height = `${clientHeight}px`;
-    };
-
-    // Monitora mudanças de tamanho do container pai
+    // Resetar fullscreen quando chamada encerrar
     useEffect(() => {
-        const resizeObserver = new ResizeObserver(() => {
-            forceCanvasResize();
-        });
-
-        if (boxRef.current) {
-            resizeObserver.observe(boxRef.current);
+        if (!isInCall && !isIncomingCall && !isOutgoingCall) {
+            setTimeout(() => setIsFullscreen(false), 0);
         }
+    }, [isInCall, isIncomingCall, isOutgoingCall]);
 
-        return () => {
-            resizeObserver.disconnect();
-        };
-    }, []);
-
-    // Callback quando o carregamento é concluído
-    useEffect(() => {
-        console.log('[VoipCamera] Verificando loading:', {
-            isLoading,
-            temCallback: !!onLoadingComplete,
-            wsUrl
-        });
-
-        if (!isLoading && onLoadingComplete) {
-            console.log('[VoipCamera] Carregamento concluído, chamando callback');
-            onLoadingComplete();
-        }
-    }, [isLoading, onLoadingComplete, wsUrl]);
+    // State derivado: loading quando há URL mas vídeo não carregou
+    const isLoading = Boolean(hlsUrl && !loadingState.loaded);
 
     useEffect(() => {
-
-        console.log(`Carregando VoipCamera com URL: ${wsUrl}`);
-
-        if (!wsUrl) {
-            console.warn("URL WebSocket não fornecida para VoipCamera.");
-
-            // Limpa o player se não houver URL
-            if (destroyFnRef.current) {
-                destroyFnRef.current();
-                destroyFnRef.current = null;
+        const video = videoRef.current;
+        if (!video) return;
+        
+        const onLoadedData = () => {
+            setLoadingState(prev => ({ ...prev, loaded: true }));
+            setRetryState({ isRetrying: false, lastError: null }); // Reset retry ao carregar com sucesso
+            if (onLoadingComplete) {
+                onLoadingComplete();
             }
-            return;
-        }
-
-        let destroyed = false;
-
-        const handleLoadError = () => {
-            if (destroyed) return;
-
-            if (retryCount < MAX_RETRIES) {
-                const nextRetry = retryCount + 1;
-                console.log(`[VoIP ${wsUrl}] Tentando reconectar (${nextRetry}/${MAX_RETRIES})...`);
-                setRetryCount(nextRetry);
-
-                // Aguarda 2s antes de tentar novamente
-                retryTimeoutRef.current = window.setTimeout(() => {
-                    if (!destroyed) {
-                        initPlayer();
+        };
+        
+        const onError = (event: Event) => {
+            // Detecta erro de rede (404, conexão perdida, etc.)
+            const target = event.target as HTMLVideoElement;
+            const error = target.error;
+            
+            let shouldRetry = false;
+            let errorMessage = 'Erro desconhecido';
+            
+            if (error) {
+                switch (error.code) {
+                    case MediaError.MEDIA_ERR_NETWORK:
+                        errorMessage = 'Erro de rede (404/conexão perdida)';
+                        shouldRetry = true;
+                        break;
+                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                        errorMessage = 'Formato não suportado';
+                        shouldRetry = true;
+                        break;
+                    case MediaError.MEDIA_ERR_DECODE:
+                        errorMessage = 'Erro de decodificação';
+                        shouldRetry = true;
+                        break;
+                    case MediaError.MEDIA_ERR_ABORTED:
+                        errorMessage = 'Reprodução abortada';
+                        shouldRetry = false; // Não tenta retry em abort
+                        break;
+                }
+            }
+            
+            setLoadingState(prev => ({ ...prev, loaded: true })); // Para esconder o loading mesmo com erro
+            
+            if (shouldRetry) {
+                console.log(`[VoipCamera] ${errorMessage} - Retry em 5s: ${hlsUrl?.split('/').pop() || 'N/A'}`);
+                
+                setRetryState({
+                    isRetrying: true,
+                    lastError: errorMessage
+                });
+                
+                // Retry após 5 segundos
+                setTimeout(() => {
+                    if (video && hlsUrl) {
+                        video.load(); // Força reload do vídeo
                     }
-                }, 2000);
+                }, 5000);
             } else {
-                console.error(`[VoIP ${wsUrl}] Falha após ${MAX_RETRIES} tentativas`);
-                setIsLoading(false);
-
-                // Força callback mesmo após falha
-                if (onLoadingComplete) {
-                    console.log('[VoipCamera] Carregamento falhou, chamando callback');
-                    onLoadingComplete();
-                }
+                console.warn(`[VoipCamera] ${errorMessage} (sem retry): ${hlsUrl?.split('/').pop() || 'N/A'}`);
+                setRetryState({ 
+                    isRetrying: false, 
+                    lastError: errorMessage 
+                });
+            }
+            
+            if (onLoadingComplete) {
+                onLoadingComplete();
             }
         };
-
-        const initPlayer = async () => {
-            setIsLoading(true);
-            loadSuccessRef.current = false;
-            let init = true;
-
-            // Limpa player anterior se existir
-            if (destroyFnRef.current) {
-                console.log("Destruindo player anterior...");
-                try {
-                    destroyFnRef.current();
-                } catch (e) {
-                    console.warn("Erro ao destruir player:", e);
-                }
-                destroyFnRef.current = null;
-                playerLoadedRef.current = false;
-            }
-
-            // Aguarda um pouco após destruir o player anterior
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            if (destroyed) return;
-
-            // Recria o canvas para garantir contexto WebGL limpo
-            const oldCanvas = canvasRef.current;
-            if (oldCanvas && oldCanvas.parentNode) {
-                const newCanvas = document.createElement('canvas');
-                // Copia todos os estilos
-                newCanvas.style.cssText = oldCanvas.style.cssText;
-                oldCanvas.parentNode.replaceChild(newCanvas, oldCanvas);
-                canvasRef.current = newCanvas;
-                console.log("Canvas recriado com sucesso");
-            }
-
-            // Mais um pequeno delay após recriar o canvas
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            if (destroyed) return;
-
-            const canvas = canvasRef.current;
-
-            if (!canvas) {
-                console.error("Canvas não encontrado");
-                setIsLoading(false);
-                return;
-            }
-            if (!window.loadPlayer) {
-                console.error("loadPlayer não encontrado no window");
-                setIsLoading(false);
-                return;
-            }
-
-            console.log(`[VoIP ${wsUrl}] Iniciando player (tentativa ${retryCount + 1}/${MAX_RETRIES})...`);
-
-            try {
-                const result = await window.loadPlayer({
-                    url: wsUrl,
-                    canvas: canvas,
-                    onSourceEstablished: () => {
-                        console.log(`[VoIP ${wsUrl}] Conexão estabelecida`);
-                        loadSuccessRef.current = true;
-                        setRetryCount(0);
-                    },
-                    onVideoDecode: () => {
-                        // Remove loading quando o primeiro frame é decodificado
-                        if (!destroyed) {
-                            if (init) {
-                                console.log(`[VoIP ${wsUrl}] Vídeo carregado com sucesso`);
-                                setIsLoading(false);
-                                loadSuccessRef.current = true;
-                                setRetryCount(0);
-                                init = false;
-                            }
-                        }
-                    }
-                }) as unknown as PlayerWithDestroy;
-
-                if (!destroyed && result && result.destroy) {
-                    destroyFnRef.current = result.destroy;
-                    playerLoadedRef.current = true;
-                    console.log("Player carregado com sucesso");
-                    setVoipCameraLoading(false);
-                }
-
-                // Timeout de segurança
-                retryTimeoutRef.current = window.setTimeout(() => {
-                    if (!loadSuccessRef.current && !destroyed) {
-                        console.warn(`[VoIP ${wsUrl}] Timeout - nenhum frame recebido em 10s`);
-                        handleLoadError();
-                    }
-                }, 10000);
-            } catch (error) {
-                console.error(`[VoIP ${wsUrl}] Erro ao carregar player:`, error);
-                handleLoadError();
-                setIsLoading(false);
-            }
-        };
-
-        // Verifica se o script já existe
-        const existingScript = document.querySelector('script[src="rtsp-relay.js"]');
-
-        if (existingScript && window.loadPlayer) {
-            // Script já carregado, executa direto
-            console.log("Script já carregado, iniciando player...");
-            initPlayer();
-        } else if (!existingScript) {
-            // Script não existe, cria novo
-            const script = document.createElement("script");
-            script.src = "rtsp-relay.js";
-            script.async = true;
-            script.onload = () => {
-                console.log("Script carregado, iniciando player...");
-                initPlayer();
-            };
-            document.body.appendChild(script);
-        } else {
-            // Script existe mas loadPlayer ainda não está pronto, aguarda
-            const checkInterval = setInterval(() => {
-                if (window.loadPlayer) {
-                    clearInterval(checkInterval);
-                    console.log("loadPlayer disponível, iniciando player...");
-                    initPlayer();
-                }
-            }, 100);
-
-            return () => {
-                clearInterval(checkInterval);
-            };
-        }
-
+        
+        video.addEventListener('loadeddata', onLoadedData);
+        video.addEventListener('error', onError);
+        
         return () => {
-            destroyed = true;
-
-            // Limpa timeout de retry
-            if (retryTimeoutRef.current) {
-                clearTimeout(retryTimeoutRef.current);
-                retryTimeoutRef.current = null;
-            }
-
-            // Chama a função destroy se disponível
-            if (destroyFnRef.current) {
-                console.log("Destruindo player no cleanup...");
-                try {
-                    destroyFnRef.current();
-                } catch (e) {
-                    console.warn("Erro ao destruir player no cleanup:", e);
-                }
-                destroyFnRef.current = null;
-            }
+            video.removeEventListener('loadeddata', onLoadedData);
+            video.removeEventListener('error', onError);
         };
-    }, [wsUrl, retryCount, MAX_RETRIES, onLoadingComplete, setVoipCameraLoading]);
-
-    // Efeito para chamar callback quando carregamento completa
-    useEffect(() => {
-        // Se não está mais carregando e o callback não foi chamado
-        if (!isLoading && !callbackCalledRef.current && onLoadingComplete) {
-            console.log('[VoipCamera] Carregamento concluído, chamando callback');
-            callbackCalledRef.current = true;
-            onLoadingComplete();
-        }
-    }, [isLoading, onLoadingComplete]);
-
-    // Reseta a flag quando uma nova URL começa a carregar
-    useEffect(() => {
-        if (isLoading) {
-            callbackCalledRef.current = false;
-        }
-    }, [isLoading]);
+    }, [onLoadingComplete, hlsUrl]);
 
     return (
         <Box
             ref={boxRef}
             display='flex'
-            width="100%"
-            height="100%"
+            width={isFullscreen ? "100vw" : "100%"}
+            height={isFullscreen ? "100vh" : "100%"}
             sx={{
                 overflow: 'hidden',
                 minWidth: 0,
                 minHeight: 0,
-                position: 'relative',
+                position: isFullscreen ? 'fixed' : 'relative',
+                top: isFullscreen ? 0 : 'auto',
+                left: isFullscreen ? 0 : 'auto',
+                zIndex: isFullscreen ? 9999 : 'auto',
+                backgroundColor: isFullscreen ? '#000' : 'transparent',
                 cursor: hasVoip ? 'pointer' : 'default',
                 outline: isInCall
                     ? '3px solid #f44336'
@@ -311,10 +157,11 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     '50%': { outline: '3px solid rgba(244, 67, 54, 1)', outlineOffset: '-3px' },
                     '100%': { outline: '3px solid rgba(244, 67, 54, 0.3)', outlineOffset: '-3px' },
                 },
-                '& canvas': {
+                '& video': {
                     maxWidth: '100% !important',
                     maxHeight: '100% !important',
-                    objectFit: 'fill !important'
+                    objectFit: 'fill !important',
+                    background: 'black',
                 }
             }}
             onMouseEnter={() => hasVoip && !isInCall && !isIncomingCall && !isOutgoingCall && setIsHovering(true)}
@@ -322,32 +169,28 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
             onClick={() => {
                 if (!hasVoip) return; // Sem VoIP, não faz nada
 
-                // isIncomingCall: clica no canvas, atende a chamada
+                // isIncomingCall: clica no vídeo, atende a chamada
                 if (isIncomingCall) {
                     if (onClick) onClick();
                 }
-                // isOutgoingCall ou isInCall: clica no canvas, encerra a chamada
+                // isOutgoingCall ou isInCall: clica no vídeo, encerra a chamada
                 else if (isOutgoingCall || isInCall) {
                     if (onHangup) onHangup();
                 }
-                // Sem chamada: clica no canvas, inicia uma chamada
+                // Sem chamada: clica no vídeo, inicia uma chamada
                 else {
                     if (onClick) onClick();
                 }
             }}
         >
-            <canvas
-                ref={canvasRef}
-                style={{
-                    width: "100%",
-                    height: "100%",
-                    maxWidth: "100%",
-                    maxHeight: "100%",
-                    background: "black",
-                    objectFit: "fill",
-                    display: "block",
-                    ...rest.style
-                }}
+            <video
+                ref={videoRef}
+                src={hlsUrl}
+                controls={false}
+                autoPlay
+                muted
+                playsInline
+                style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
                 {...rest}
             />
 
@@ -367,6 +210,90 @@ export const VoipCamera = ({ wsUrl, onClick, isIncomingCall = false, isInCall = 
                     }}
                 >
                     <CircularProgress size={60} sx={{ color: 'white' }} />
+                </Box>
+            )}
+
+            {/* Ícone discreto de retry */}
+            {retryState.isRetrying && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 8,
+                        left: 8,
+                        zIndex: 10
+                    }}
+                >
+                    <RefreshIcon 
+                        sx={{ 
+                            fontSize: '16px', 
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            animation: 'spin 2s linear infinite',
+                            '@keyframes spin': {
+                                '0%': {
+                                    transform: 'rotate(0deg)',
+                                },
+                                '100%': {
+                                    transform: 'rotate(360deg)',
+                                },
+                            }
+                        }} 
+                    />
+                </Box>
+            )}
+            
+            {/* Indicador de erro (sem retry) */}
+            {!retryState.isRetrying && retryState.lastError && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(244, 67, 54, 0.9)',
+                        color: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        zIndex: 10
+                    }}
+                >
+                    Erro: {retryState.lastError}
+                </Box>
+            )}
+
+            {/* Área circular central para fullscreen - só durante chamada estabelecida */}
+            {callConfirmed && (
+                <Box
+                    onMouseEnter={() => setIsHoveringCenter(true)}
+                    onMouseLeave={() => setIsHoveringCenter(false)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setIsFullscreen(!isFullscreen);
+                    }}
+                    sx={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 8,
+                        backgroundColor: isHoveringCenter ? 'rgba(0, 0, 0, 0.7)' : 'transparent',
+                        transition: 'background-color 0.3s ease',
+                    }}
+                >
+                    {isHoveringCenter && (
+                        isFullscreen ? (
+                            <ZoomOutIcon sx={{ fontSize: '2rem', color: 'white' }} />
+                        ) : (
+                            <ZoomInIcon sx={{ fontSize: '2rem', color: 'white' }} />
+                        )
+                    )}
                 </Box>
             )}
 

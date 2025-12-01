@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
 import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
@@ -9,18 +9,55 @@ import { Box, Typography } from '@mui/material';
 import { useVoipCamera } from '../../contexts/VoipCameraContext';
 
 interface Camera {
-    id: number;
-    description: string;
-    extension: string;
+    name: string;
+    confName: string;
+    extension?: string;
+    description?: string;
 }
 
 const Home: React.FC = () => {
+    // Refs para elementos de áudio
+    const phoneRingRef = useRef<HTMLAudioElement>(null);
+    const phoneCallRef = useRef<HTMLAudioElement>(null);
+    const phoneEndRef = useRef<HTMLAudioElement>(null);
+
+    // Função para tocar áudio de encerramento (definida primeiro para o callback)
+    const playEndCallSound = useCallback(() => {
+        if (phoneEndRef.current) {
+            try {
+                phoneEndRef.current.play().catch((error) => {
+                    console.warn('[Audio] Erro ao reproduzir som de encerramento:', error);
+                });
+            } catch (error) {
+                console.warn('[Audio] Erro ao tentar reproduzir som de encerramento:', error);
+            }
+        }
+    }, []);
+
     // Hook SIP
-    const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip();
-    const { voipCameraLoading, setVoipCameraLoading } = useVoipCamera();
+    const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip({
+        onCallEnded: playEndCallSound
+    });
+    const { setVoipCameraLoading } = useVoipCamera();
+    const [cameras, setCameras] = useState<Camera[]>([]);
+    const [, setLoading] = useState(true);
+ 
+    // Estado para a área VoIP
+    const [voipUrl, setVoipUrl] = useState<string | undefined>(undefined);
+    const [voipKey, setVoipKey] = useState(0);
+    const [voipCameraId, setVoipCameraId] = useState<string | undefined>(undefined);
+
+    // Estado para controlar chamada ativa (de ramal sem câmera)
+    const [activeCallExtension, setActiveCallExtension] = useState<string | undefined>(undefined);
+
+    // Estado para controlar chamada sainte (outgoing call)
+    const [isOutgoingCall, setIsOutgoingCall] = useState(false);
+
+    // Ref para prevenir múltiplos hangups simultâneos
+    const isHangingUpRef = useRef(false);
 
     // Debug: log quando o ref é criado
-    React.useEffect(() => {
+    useEffect(() => {
         console.log('[Home] remoteAudioRef:', remoteAudioRef);
         console.log('[Home] remoteAudioRef.current:', remoteAudioRef?.current);
 
@@ -38,25 +75,42 @@ const Home: React.FC = () => {
                 parentElement: audioElement.parentElement?.tagName
             });
         }
-    }, [remoteAudioRef]);    // Estado para armazenar as câmeras carregadas da API
-    const [cameras, setCameras] = React.useState<Camera[]>([]);
-    const [loading, setLoading] = React.useState(true);
-
-    // Carregar câmeras da API (máximo de 14)
-    React.useEffect(() => {
+    }, [remoteAudioRef]);     
+    
+    // Carregar câmeras da API
+    useEffect(() => {
         const fetchCameras = async () => {
             try {
-                const response = await axios.get('https://rtsp.condominionovaresidence.com/api/v1/camera/list');
-                // Limita para as 14 primeiras câmeras
-                setCameras(response.data.cameras.slice(0, 14));
+                const response = await axios.get('http://192.168.0.250:9997/v3/paths/list');
+                
+                // Processa as câmeras para extrair o ramal do nome
+                const processedCameras = response.data.items.map((item: unknown) => {
+                    const camera = item as Camera;
+                    const nameParts = camera.name.split('_');
+                    const extension = nameParts.length > 1 && nameParts[1] !== '0' ? nameParts[1] : undefined;
+                    
+                    return {
+                        ...camera,
+                        extension: extension,
+                        description: (extension ? `Ramal ${extension}` : 'Sem interfone')
+                    };
+                });
+                
+                // Ordena as câmeras por nome (cam1, cam2, cam3, ...)
+                const sortedCameras = processedCameras.sort((a: Camera, b: Camera) => {
+                    // Extrai o número da câmera do nome (cam1 -> 1, cam10 -> 10)
+                    const getNumber = (name: string) => {
+                        const match = name.match(/cam(\d+)/);
+                        return match ? parseInt(match[1], 10) : 0;
+                    };
+                    
+                    return getNumber(a.name) - getNumber(b.name);
+                });
+                
+                setCameras(sortedCameras);
                 setLoading(false);
-
-                // Timeout de 15 segundos
-                setTimeout(() => {
-                    console.log('[Home] Timeout de 15s atingido ao carregar câmeras');
-                    setVoipCameraLoading(false);
-                }, 15000);
-
+                setVoipCameraLoading(false);
+          
             } catch (error) {
                 console.error('Erro ao carregar câmeras:', error);
                 setLoading(false);
@@ -66,37 +120,27 @@ const Home: React.FC = () => {
 
         fetchCameras();
     }, [setVoipCameraLoading]);
-
-    // Estado para controlar quantas câmeras estão visíveis
-    const [visibleCount, setVisibleCount] = React.useState(1);
-
-    // Estado para a área VoIP
-    const [voipUrl, setVoipUrl] = React.useState<string | undefined>(undefined);
-    const [voipKey, setVoipKey] = React.useState(0);
-    const [voipCameraId, setVoipCameraId] = React.useState<number | undefined>(undefined);
-    const [isVoipCameraLoading, setIsVoipCameraLoading] = React.useState(false);
-
-    // Estado para controlar chamada ativa (de ramal sem câmera)
-    const [activeCallExtension, setActiveCallExtension] = React.useState<string | undefined>(undefined);
-
-    // Estado para controlar chamada sainte (outgoing call)
-    const [isOutgoingCall, setIsOutgoingCall] = React.useState(false);
-
-    // Refs para os sons
-    const phoneRingRef = React.useRef<HTMLAudioElement | null>(null);
-    const phoneCallRef = React.useRef<HTMLAudioElement | null>(null);
-
-    // Ref para prevenir múltiplos hangups simultâneos
-    const isHangingUpRef = React.useRef(false);
+   
+    // Monta a URL HLS da câmera
+    const getCameraUrl = (cameraName: string) => {
+        return `http://192.168.0.250:8888/${cameraName}/index.m3u8`;
+    };
 
     // Callback para quando o VoipCamera termina de carregar
-    const handleVoipCameraLoadingComplete = React.useCallback(() => {
-        console.log('[Home] VoipCamera carregamento completo, desbloqueando');
-        setIsVoipCameraLoading(false);
-    }, []);
+    const handleVoipCameraLoadingComplete = useCallback(() => {
+        console.log('[Home] VoipCamera carregamento completo');
+        setVoipCameraLoading(false);
+    }, [setVoipCameraLoading]);
+
+    // Função para rejeitar chamada com áudio
+    const handleRejectCall = useCallback(() => {
+        console.log('[Reject] Rejeitando chamada');
+        
+        hangup();
+    }, [hangup]);
 
     // Wrapper seguro para hangup
-    const safeHangup = React.useCallback(() => {
+    const handleSafeHangup = useCallback(() => {
         if (isHangingUpRef.current) {
             console.log('[Hangup] Já está encerrando, ignorando clique duplicado');
             return;
@@ -104,7 +148,7 @@ const Home: React.FC = () => {
 
         isHangingUpRef.current = true;
         console.log('[Hangup] Iniciando encerramento da chamada');
-
+        
         hangup();
 
         // Reset do flag após um pequeno delay
@@ -114,54 +158,29 @@ const Home: React.FC = () => {
         }, 1000);
     }, [hangup]);
 
-    React.useEffect(() => {
-        if (visibleCount < cameras.length) {
-            const timer = setTimeout(() => {
-                setVisibleCount(visibleCount + 1);
-            }, 500);
-            return () => clearTimeout(timer);
-        }
-    }, [visibleCount, cameras.length]);
-
-    const getCameraUrl = (cameraId: number, highDef = false) => {
-        // highDef = true usa tipo 0 (alta definição), false usa tipo 1 (baixa)
-        const type = highDef ? '0' : '1';
-        return `wss://rtsp.condominionovaresidence.com/stream/${cameraId}/${type}`;
-    };
-
     // Função para lidar com o clique em uma câmera pequena
-    const handleCameraClick = (cameraId: number) => {
+    const handleCameraClick = (cameraName: string) => {
         // Bloqueia troca de câmera durante chamadas
-        if (status.incomingCall || status.inCall || isOutgoingCall || voipCameraLoading) {
+        if (status.incomingCall || status.inCall || isOutgoingCall) {
             console.log('Troca de câmera bloqueada durante chamada');
             return;
         }
 
-        // Bloqueia cliques rápidos enquanto carrega câmera
-        if (isVoipCameraLoading || voipCameraLoading) {
-            console.log('Clique ignorado: câmera ainda está carregando. ID atual:', voipCameraId);
-            return;
-        }
+        const hlsUrl = getCameraUrl(cameraName);
+        console.log(`Câmera ${cameraName} clicada. URL HLS: ${hlsUrl}`);
 
-        const highDefUrl = getCameraUrl(cameraId, true);
-
-        console.log(`Câmera ${cameraId} clicada. URL HD: ${highDefUrl}`);
-
-        // Marca como carregando
-        setIsVoipCameraLoading(true);
-        setVoipCameraLoading(true);
-
-        // Distribui entre as 4 áreas VoIP de forma rotativa ou lógica desejada
-        // Por enquanto, vou colocar sempre na área A
-        setVoipUrl(highDefUrl);
-        setVoipCameraId(cameraId); // Armazena o ID da câmera atual
+        setVoipUrl(hlsUrl);
+        setVoipCameraId(cameraName); // Armazena o nome da câmera atual
         setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
     };
 
     // Função para iniciar chamada sainte (outgoing call)
     const handleOutgoingCall = () => {
+
+        console.log('Iniciando chamada sainte para câmera:', voipCameraId);
+
         // Encontra a câmera correspondente ao voipCameraId atual
-        const currentCamera = cameras.find(cam => cam.id === voipCameraId);
+        const currentCamera = cameras.find(cam => cam.name === voipCameraId);
 
         // Verifica se a câmera tem extension (tem interfone)
         if (!currentCamera) {
@@ -187,7 +206,7 @@ const Home: React.FC = () => {
     };
 
     // Detectar chamadas recebidas e carregar câmera automaticamente se disponível
-    React.useEffect(() => {
+    useEffect(() => {
         if (status.incomingCall) {
             const callerExtension = status.incomingCall.callerExtension;
 
@@ -195,48 +214,43 @@ const Home: React.FC = () => {
             const camera = cameras.find(cam => cam.extension === callerExtension);
 
             if (camera) {
-                // Carrega a câmera em alta definição
-                const highDefUrl = getCameraUrl(camera.id, true);
+                // Carrega a câmera
+                const hlsUrl = getCameraUrl(camera.name);
 
                 // Só atualiza se for uma câmera diferente
-                if (voipUrl !== highDefUrl) {
-                    setVoipUrl(highDefUrl);
-                    setVoipKey(prev => prev + 1);
+                if (voipUrl !== hlsUrl) {
+                    // Usar setTimeout para agendar setState fora do effect
+                    setTimeout(() => {
+                        setVoipUrl(hlsUrl);
+                        setVoipKey(prev => prev + 1);
+                        setVoipCameraId(camera.name); // Atualiza o ID da câmera ativa para o ramal que está chamando
+                    }, 100);
                 }
-                setActiveCallExtension(undefined); // Limpa chamada sem câmera se houver
+                setTimeout(() => setActiveCallExtension(undefined), 100); // Limpa chamada sem câmera se houver
             } else {
                 // Marca que há uma chamada de ramal sem câmera
-                setActiveCallExtension(callerExtension);
-                setVoipUrl(undefined);
+                setTimeout(() => {
+                    setActiveCallExtension(callerExtension);
+                    setVoipUrl(undefined);
+                }, 100);
             }
 
             // Limpa chamada sainte se houver
-            setIsOutgoingCall(false);
+            setTimeout(() => setIsOutgoingCall(false), 0);
         } else if (status.inCall && activeCallExtension) {
             // Mantém activeCallExtension durante a chamada
             // Não faz nada aqui, apenas mantém o estado
         } else if (!status.inCall && !status.incomingCall) {
             // Limpa tudo quando não há chamada
-            setActiveCallExtension(undefined);
-            setIsOutgoingCall(false);
+            setTimeout(() => {
+                setActiveCallExtension(undefined);
+                setIsOutgoingCall(false);
+            }, 100);
         }
     }, [status.incomingCall, status.inCall, cameras, activeCallExtension, voipUrl]);
 
-    // Timeout de segurança para desbloquear loading se ninguém chamar o callback
-    React.useEffect(() => {
-        if (isVoipCameraLoading) {
-            console.log('[Home] VoipCamera marcada como carregando, iniciando timer de 15s');
-            const timer = setTimeout(() => {
-                console.log('[Home] Timeout de carregamento atingido, desbloqueando');
-                setIsVoipCameraLoading(false);
-            }, 15000); // 15 segundos de timeout
-
-            return () => clearTimeout(timer);
-        }
-    }, [isVoipCameraLoading]);
-
     // Tocar som quando receber chamada entrante (phone-ring.mp3)
-    React.useEffect(() => {
+    useEffect(() => {
         if (status.incomingCall && phoneRingRef.current) {
             phoneRingRef.current.loop = true;
             phoneRingRef.current.play().catch(err => console.error('Erro ao tocar phone-ring:', err));
@@ -247,7 +261,7 @@ const Home: React.FC = () => {
     }, [status.incomingCall]);
 
     // Parar som quando a chamada é confirmada/atendida ou cancelada (phone-call.mp3)
-    React.useEffect(() => {
+    useEffect(() => {
         console.log(`[Audio Debug] callConfirmed: ${status.callConfirmed}, isOutgoingCall: ${isOutgoingCall}, inCall: ${status.inCall}`);
 
         // Para o som quando:
@@ -265,13 +279,13 @@ const Home: React.FC = () => {
 
             // Limpa o estado de outgoing call quando necessário
             if (isOutgoingCall && (status.callConfirmed || !status.inCall)) {
-                setIsOutgoingCall(false);
+                setTimeout(() => setIsOutgoingCall(false), 0);
             }
         }
     }, [status.callConfirmed, isOutgoingCall, status.inCall]);
 
     // Limpa estados quando a chamada é encerrada (proteção adicional)
-    React.useEffect(() => {
+    useEffect(() => {
         if (!status.inCall && !status.incomingCall) {
             console.log('[Cleanup] Limpando estados após chamada encerrada');
 
@@ -287,18 +301,10 @@ const Home: React.FC = () => {
 
             // Limpa estados
             if (isOutgoingCall) {
-                setIsOutgoingCall(false);
+                setTimeout(() => setIsOutgoingCall(false), 0);
             }
         }
     }, [status.inCall, status.incomingCall, isOutgoingCall]);
-
-    if (loading) {
-        return (
-            <Box sx={{ width: '100vw', height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="h5" color="white">Carregando câmeras...</Typography>
-            </Box>
-        );
-    }
 
     return (
         <Box sx={{ width: '100vw', height: '100vh', background: '#000', m: 0, p: 0, overflow: 'hidden', position: 'fixed', top: 0, left: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'stretch', paddingBottom: '50px' }}>
@@ -306,8 +312,8 @@ const Home: React.FC = () => {
                 width: '100%',
                 height: '100%',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', // 4 colunas
-                gridTemplateRows: 'repeat(5, minmax(0, 1fr))',    // 5 linhas
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', // 4 colunas fixas
+                gridTemplateRows: `repeat(${Math.max(5, Math.ceil((cameras.length + 6) / 4))}, minmax(0, 1fr))`, // Linhas dinâmicas
                 gap: 0,
                 m: 0,
                 p: 0,
@@ -355,10 +361,11 @@ const Home: React.FC = () => {
                             // Câmera identificada - mostra VoipCamera com botões Atender/Recusar
                             <VoipCamera
                                 key={voipKey}
-                                wsUrl={voipUrl}
+                                hlsUrl={voipUrl}
                                 onClick={answerCall}
                                 isIncomingCall={true}
-                                onReject={hangup}
+                                callConfirmed={status.callConfirmed}
+                                onReject={handleRejectCall}
                                 onLoadingComplete={handleVoipCameraLoadingComplete}
                             />
                         ) : (
@@ -374,9 +381,10 @@ const Home: React.FC = () => {
                         // Chamada ativa com câmera - mostra VoipCamera com botão ENCERRAR
                         <VoipCamera
                             key={voipKey}
-                            wsUrl={voipUrl}
+                            hlsUrl={voipUrl}
                             isInCall={true}
-                            onHangup={safeHangup}
+                            callConfirmed={status.callConfirmed}
+                            onHangup={handleSafeHangup}
                             onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : activeCallExtension ? (
@@ -386,24 +394,25 @@ const Home: React.FC = () => {
                             description={cameras.find(c => c.extension === activeCallExtension)?.description}
                             onAnswer={answerCall}
                             isInCall={true}
-                            onHangup={safeHangup}
+                            onHangup={handleSafeHangup}
                         />
                     ) : isOutgoingCall && voipUrl ? (
                         // Chamada sainte em progresso (outgoing call)
                         <VoipCamera
                             key={voipKey}
-                            wsUrl={voipUrl}
+                            hlsUrl={voipUrl}
                             isOutgoingCall={true}
-                            onHangup={safeHangup}
+                            callConfirmed={status.callConfirmed}
+                            onHangup={handleSafeHangup}
                             onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : voipUrl ? (
                         // Câmera selecionada manualmente (sem chamada)
                         <VoipCamera
                             key={voipKey}
-                            wsUrl={voipUrl}
-                            onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
-                            hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
+                            hlsUrl={voipUrl}
+                            onClick={cameras.find(c => c.name === voipCameraId)?.extension ? handleOutgoingCall : undefined}
+                            hasVoip={!!cameras.find(c => c.name === voipCameraId)?.extension}
                             onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : (
@@ -414,8 +423,8 @@ const Home: React.FC = () => {
                     )}
                 </Box>
 
-                {/* Câmeras 1-14 distribuídas */}
-                {cameras.slice(0, Math.min(visibleCount, 14)).map((cam, index) => {
+                {/* Câmeras distribuídas dinamicamente */}
+                {cameras.map((cam, index) => {
                     let gridColumn, gridRow;
 
                     // Câmeras 1-2 (linha 1, colunas 3-4)
@@ -433,23 +442,19 @@ const Home: React.FC = () => {
                         gridColumn = `${3 + (index - 4)} / ${4 + (index - 4)}`;
                         gridRow = '3 / 4';
                     }
-                    // Câmeras 7-10 (linha 4, colunas 1-4)
-                    else if (index < 10) {
-                        const col = (index - 6);
-                        gridColumn = `${col + 1} / ${col + 2}`;
-                        gridRow = '4 / 5';
-                    }
-                    // Câmeras 11-14 (linha 5, colunas 1-4)
+                    // Câmeras restantes (a partir da linha 4)
                     else {
-                        const col = (index - 10);
+                        const adjustedIndex = index - 6; // Remove as 6 primeiras câmeras
+                        const row = Math.floor(adjustedIndex / 4) + 4; // Começa na linha 4
+                        const col = (adjustedIndex % 4); // Coluna 0-3
                         gridColumn = `${col + 1} / ${col + 2}`;
-                        gridRow = '5 / 6';
+                        gridRow = `${row} / ${row + 1}`;
                     }
 
                     return (
                         <Box
-                            key={cam.id}
-                            onClick={() => handleCameraClick(cam.id)}
+                            key={cam.name}
+                            onClick={() => handleCameraClick(cam.name)}
                             sx={{
                                 gridColumn,
                                 gridRow,
@@ -465,13 +470,12 @@ const Home: React.FC = () => {
                                 minWidth: 0,
                                 minHeight: 0,
                                 overflow: 'hidden',
-                                opacity: isVoipCameraLoading ? 0.5 : 1,
-                                cursor: isVoipCameraLoading ? 'not-allowed' : 'pointer',
+                                cursor: 'pointer',
                                 transition: 'opacity 0.3s ease, cursor 0.3s ease'
                             }}
-                            title={isVoipCameraLoading ? 'Câmera carregando. Aguarde para selecionar outra.' : cam.description}
+                            title={cam.description || cam.name}
                         >
-                            <CameraPlayer wsUrl={getCameraUrl(cam.id)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
+                            <CameraPlayer hlsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
                         </Box>
                     );
                 })}
@@ -483,6 +487,7 @@ const Home: React.FC = () => {
             {/* Sons de chamada */}
             <audio ref={phoneRingRef} src="phone-ring.mp3" style={{ display: 'none' }} />
             <audio ref={phoneCallRef} src="phone-call.mp3" style={{ display: 'none' }} />
+            <audio ref={phoneEndRef} src="phone-end.mp3" style={{ display: 'none' }} />
 
             {/* Barra de Status SIP */}
             <SipStatusBar

@@ -1,201 +1,95 @@
-import { Box, CircularProgress } from '@mui/material';
+import { Box } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useRef, useEffect, useState } from 'react';
-import { cameraQueue } from '../../utils/cameraQueue';
 
-interface CameraPlayerProps extends React.CanvasHTMLAttributes<HTMLCanvasElement> {
-    wsUrl: string;
+interface CameraPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
+    hlsUrl: string;
 }
 
-export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
+    const videoRef = useRef<HTMLVideoElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
-    const playerLoadedRef = useRef(false);
-    const [isVisible, setIsVisible] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [retryCount, setRetryCount] = useState(0);
-    const retryTimeoutRef = useRef<number | null>(null);
-    const loadSuccessRef = useRef(false);
-    const releaseQueueRef = useRef<(() => void) | null>(null);
-    const MAX_RETRIES = 3;
+    
+    // Estado para controle de retry
+    const [retryState, setRetryState] = useState({ 
+        isRetrying: false, 
+        lastError: null as string | null 
+    });
 
-    // Força o redimensionamento do canvas
-    const forceCanvasResize = () => {
-        if (!canvasRef.current || !boxRef.current || !playerLoadedRef.current) return;
-
-        const { clientWidth, clientHeight } = boxRef.current;
-
-        // Força via style inline para sobrescrever qualquer estilo aplicado pelo script
-        canvasRef.current.style.width = `${clientWidth}px`;
-        canvasRef.current.style.height = `${clientHeight}px`;
-    };
-
-    // Monitora mudanças de tamanho do container pai
+    // Sistema de retry para erros de rede
     useEffect(() => {
-        const resizeObserver = new ResizeObserver(() => {
-            forceCanvasResize();
-        });
-
-        if (boxRef.current) {
-            resizeObserver.observe(boxRef.current);
-        }
-
-        return () => {
-            resizeObserver.disconnect();
+        const video = videoRef.current;
+        if (!video) return;
+        
+        const onLoadedData = () => {
+            setRetryState({ isRetrying: false, lastError: null }); // Reset retry ao carregar com sucesso
         };
-    }, []);
-
-    // Intersection Observer para detectar quando o componente está visível
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                setIsVisible(entry.isIntersecting);
-            },
-            {
-                threshold: 0.1, // Começa a carregar quando 10% está visível
-                rootMargin: '50px' // Começa a carregar 50px antes de entrar na tela
+        
+        const onError = (event: Event) => {
+            // Detecta erro de rede (404, conexão perdida, etc.)
+            const target = event.target as HTMLVideoElement;
+            const error = target.error;
+            
+            let shouldRetry = false;
+            let errorMessage = 'Erro desconhecido';
+            
+            if (error) {
+                switch (error.code) {
+                    case MediaError.MEDIA_ERR_NETWORK:
+                        errorMessage = 'Erro de rede (404/conexão perdida)';
+                        shouldRetry = true;
+                        break;
+                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                        errorMessage = 'Formato não suportado';
+                        shouldRetry = true;
+                        break;
+                    case MediaError.MEDIA_ERR_DECODE:
+                        errorMessage = 'Erro de decodificação';
+                        shouldRetry = true;
+                        break;
+                    case MediaError.MEDIA_ERR_ABORTED:
+                        errorMessage = 'Reprodução abortada';
+                        shouldRetry = false; // Não tenta retry em abort
+                        break;
+                }
             }
-        );
-
-        if (boxRef.current) {
-            observer.observe(boxRef.current);
-        }
-
-        return () => {
-            observer.disconnect();
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!isVisible) return; // Só carrega quando visível
-
-        let destroyed = false;
-        loadSuccessRef.current = false;
-
-        let init = true;
-
-        const loadPlayer = async () => {
-            // Aguarda slot na fila
-            const releaseQueue = await cameraQueue.acquire();
-            releaseQueueRef.current = releaseQueue;
-
-            const script = document.createElement("script");
-            script.src = "rtsp-relay.js";
-            script.async = true;
-
-            script.onload = async () => {
-                if (destroyed) {
-                    releaseQueue(); // Libera se foi destruído
-                    return;
-                }
-                if (!canvasRef.current) {
-                    console.error("Canvas não encontrado");
-                    releaseQueue(); // Libera em caso de erro
-                    handleLoadError();
-                    return;
-                }
-                if (!window.loadPlayer) {
-                    console.error("loadPlayer não encontrado no window");
-                    releaseQueue(); // Libera em caso de erro
-                    handleLoadError();
-                    return;
-                }
-
-                console.log(`[Câmera ${wsUrl}] Iniciando player (tentativa ${retryCount + 1}/${MAX_RETRIES})...`);
-
-                await window.loadPlayer({
-                    url: wsUrl,
-                    canvas: canvasRef.current,
-                    onSourceEstablished: () => {
-                        console.log(`[Câmera ${wsUrl}] Conexão estabelecida`);
-                        loadSuccessRef.current = true;
-                        setRetryCount(0);
-                    },
-                    onVideoDecode: () => {
-                        // Remove loading quando o primeiro frame é decodificado
-                        if (!destroyed && init) {
-                            console.log(`[Câmera ${wsUrl}] Vídeo carregado com sucesso`);
-                            setIsLoading(false);
-                            loadSuccessRef.current = true;
-                            setRetryCount(0);
-                            init = false;
-
-                            // LIBERA A FILA AQUI - quando vídeo realmente carregou
-                            releaseQueue();
-                            releaseQueueRef.current = null;
-                        }
-                    }
-                }).catch((error: Error) => {
-                    console.error(`[Câmera ${wsUrl}] Erro ao carregar player:`, error);
-                    releaseQueue(); // Libera em caso de erro
-                    handleLoadError();
+            
+            if (shouldRetry) {
+                console.log(`[CameraPlayer] ${errorMessage} - Retry em 5s: ${hlsUrl.split('/').pop()}`);
+                
+                setRetryState({
+                    isRetrying: true,
+                    lastError: errorMessage
                 });
-
-                // Timeout de segurança: se após 10s não receber vídeo, considera falha
-                retryTimeoutRef.current = window.setTimeout(() => {
-                    if (!loadSuccessRef.current && !destroyed) {
-                        console.warn(`[Câmera ${wsUrl}] Timeout - nenhum frame recebido em 10s`);
-                        if (releaseQueueRef.current) {
-                            releaseQueueRef.current(); // Libera em caso de timeout
-                            releaseQueueRef.current = null;
-                        }
-                        handleLoadError();
+                
+                // Retry após 5 segundos
+                setTimeout(() => {
+                    if (video && hlsUrl) {
+                        video.load(); // Força reload do vídeo
                     }
-                }, 10000);
-            };
-
-            script.onerror = () => {
-                console.error(`[Câmera ${wsUrl}] Erro ao carregar script rtsp-relay.js`);
-                releaseQueue(); // Libera em caso de erro
-                handleLoadError();
-            };
-
-            document.body.appendChild(script);
-        };
-
-        const handleLoadError = () => {
-            if (destroyed) return;
-
-            if (retryCount < MAX_RETRIES) {
-                const nextRetry = retryCount + 1;
-                console.log(`[Câmera ${wsUrl}] Tentando reconectar (${nextRetry}/${MAX_RETRIES})...`);
-                setRetryCount(nextRetry);
-
-                // Aguarda 2s antes de tentar novamente
-                retryTimeoutRef.current = window.setTimeout(() => {
-                    if (!destroyed) {
-                        loadPlayer();
-                    }
-                }, 2000);
+                }, 5000);
             } else {
-                console.error(`[Câmera ${wsUrl}] Falha após ${MAX_RETRIES} tentativas`);
-                setIsLoading(false);
+                console.warn(`[CameraPlayer] ${errorMessage} (sem retry): ${hlsUrl.split('/').pop()}`);
+                setRetryState({ 
+                    isRetrying: false, 
+                    lastError: errorMessage 
+                });
             }
         };
-
-        // Inicia o carregamento
-        loadPlayer();
-
+        
+        video.addEventListener('loadeddata', onLoadedData);
+        video.addEventListener('error', onError);
+        
         return () => {
-            destroyed = true;
-
-            // Limpa timeout de retry
-            if (retryTimeoutRef.current) {
-                clearTimeout(retryTimeoutRef.current);
-                retryTimeoutRef.current = null;
-            }
-
-            // Libera contexto WebGL manualmente
-            if (canvasRef.current) {
-                // eslint-disable-next-line react-hooks/exhaustive-deps
-                const gl = canvasRef.current.getContext('webgl') || canvasRef.current.getContext('experimental-webgl');
-                if (gl && typeof (gl as WebGLRenderingContext).getExtension === 'function') {
-                    const loseCtx = (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context');
-                    if (loseCtx) loseCtx.loseContext();
-                }
-            }
+            video.removeEventListener('loadeddata', onLoadedData);
+            video.removeEventListener('error', onError);
         };
-    }, [wsUrl, isVisible, retryCount, MAX_RETRIES]);
-
+    }, [hlsUrl]);
+    
+    // Reset retry state quando URL muda
+    useEffect(() => {
+        setRetryState({ isRetrying: false, lastError: null });
+    }, [hlsUrl]);
 
     return (
         <Box
@@ -214,46 +108,72 @@ export const CameraPlayer = ({ wsUrl, ...rest }: CameraPlayerProps) => {
                     outline: '2px solid white',
                     outlineOffset: '-2px',
                 },
-                '& canvas': {
+                '& video': {
                     maxWidth: '100% !important',
                     maxHeight: '100% !important',
-                    objectFit: 'fill !important'
+                    objectFit: 'fill !important',
+                    background: 'black',
                 }
             }}
         >
-            {isLoading && (
+            <video
+                ref={videoRef}
+                src={hlsUrl}
+                controls={false}
+                autoPlay
+                muted
+                playsInline
+                style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
+                {...rest}
+            />
+            
+            {/* Ícone discreto de retry */}
+            {retryState.isRetrying && (
                 <Box
                     sx={{
                         position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        top: 8,
+                        left: 8,
                         zIndex: 10
                     }}
                 >
-                    <CircularProgress sx={{ color: 'white' }} />
+                    <RefreshIcon 
+                        sx={{ 
+                            fontSize: '16px', 
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            animation: 'spin 2s linear infinite',
+                            '@keyframes spin': {
+                                '0%': {
+                                    transform: 'rotate(0deg)',
+                                },
+                                '100%': {
+                                    transform: 'rotate(360deg)',
+                                },
+                            }
+                        }} 
+                    />
                 </Box>
             )}
-
-            <canvas
-                ref={canvasRef}
-                style={{
-                    width: "100%",
-                    height: "100%",
-                    maxWidth: "100%",
-                    maxHeight: "100%",
-                    background: "black",
-                    objectFit: "fill",
-                    display: "block",
-                    ...rest.style
-                }}
-                {...rest}
-            />
+            
+            {/* Indicador de erro (sem retry) */}
+            {!retryState.isRetrying && retryState.lastError && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(244, 67, 54, 0.9)',
+                        color: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        zIndex: 10
+                    }}
+                >
+                    Erro: {retryState.lastError}
+                </Box>
+            )}
         </Box>
     );
 };
