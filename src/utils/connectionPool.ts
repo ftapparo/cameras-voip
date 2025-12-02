@@ -79,7 +79,6 @@ class ConnectionPool {
     };
   }
 }
-}
 
 // Instância singleton
 export const connectionPool = new ConnectionPool(6);

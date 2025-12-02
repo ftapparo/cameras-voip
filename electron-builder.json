@@ -7,11 +7,27 @@
   "files": [
     "dist/**",
     "electron-main.cjs",
-    "public/**"
+    "public/**",
+    "camera-proxy-server.mjs",
+    "cameras.conf",
+    "proxy-digest.js",
+    "config-helper.mjs",
+    "node_modules/express/**",
+    "node_modules/cors/**",
+    "node_modules/ini/**",
+    "node_modules/ws/**"
+  ],
+  "asarUnpack": [
+    "camera-proxy-server.mjs",
+    "cameras.conf",
+    "config-helper.mjs",
+    "proxy-digest.js",
+    "node_modules/**/*"
   ],
   "win": {
     "icon": "public/icon-512x512.png",
-    "target": "nsis"
+    "target": "nsis",
+    "forceCodeSigning": false
   },
   "nsis": {
     "oneClick": true,

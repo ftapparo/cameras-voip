@@ -92,6 +92,7 @@ function getStaticCameras(): CameraConfig[] {
       id: 'cam1',
       name: 'Entrada Portaria Principal',
       url: 'http://192.168.0.103/cgi-bin/video.cgi',
+      snapshotUrl: 'http://localhost:3001/snapshot/cam1',
       hasVoip: false,
       description: 'Entrada portaria principal (sem ramal)',
       ip: '192.168.0.103'
@@ -100,6 +101,7 @@ function getStaticCameras(): CameraConfig[] {
       id: 'cam3',
       name: 'Entrada Veículos',
       url: 'http://192.168.0.110/cgi-bin/video.cgi',
+      snapshotUrl: 'http://localhost:3001/snapshot/cam3',
       extension: '9013',
       hasVoip: true,
       description: 'Entrada veículos (ramal 9013)',
@@ -109,6 +111,7 @@ function getStaticCameras(): CameraConfig[] {
       id: 'cam5',
       name: 'Portaria Serviço Externa',
       url: 'http://192.168.0.106/cgi-bin/video.cgi',
+      snapshotUrl: 'http://localhost:3001/snapshot/cam5',
       extension: '9021',
       hasVoip: true,
       description: 'Portaria serviço externa (ramal 9021)',

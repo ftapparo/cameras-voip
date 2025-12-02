@@ -91,7 +91,7 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
         return 'Desconectado';
     };
 
-    const handleOpenDevTools = () => {
+    const handleOpenDevTools = async () => {
         console.log('[DevTools] Tentando abrir DevTools...');
         
         try {
@@ -99,14 +99,15 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
             const electronWindow = window as unknown as { 
                 electron?: { 
                     ipcRenderer?: { 
-                        send: (channel: string) => void 
+                        invoke: (channel: string) => Promise<boolean>
                     } 
                 } 
             };
             
-            if (electronWindow.electron?.ipcRenderer?.send) {
+            if (electronWindow.electron?.ipcRenderer?.invoke) {
                 console.log('[DevTools] Usando IPC do Electron');
-                electronWindow.electron.ipcRenderer.send('toggle-devtools');
+                const isOpen = await electronWindow.electron.ipcRenderer.invoke('toggle-devtools');
+                console.log('[DevTools] Estado após toggle:', isOpen ? 'Aberto' : 'Fechado');
                 return;
             }
         } catch (error) {
@@ -314,7 +315,7 @@ export const SipStatusBar = ({ isConnected, isRegistered, extension, onConfigSav
 
                     {/* DevTools */}
                     <IconButton
-                        onClick={handleOpenDevTools}
+                        onClick={() => handleOpenDevTools()}
                         title="Abrir DevTools"
                         onFocus={(e) => e.target.blur()}
                         tabIndex={-1}
