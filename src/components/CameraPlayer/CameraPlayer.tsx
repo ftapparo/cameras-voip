@@ -1,16 +1,17 @@
 import { Box } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useRef, useEffect, useState } from 'react';
-import Hls from 'hls.js';
+import { connectionPool } from '../../utils/connectionPool';
 
-interface CameraPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
-    hlsUrl: string;
+interface CameraPlayerProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+    cameraUrl: string;
+    lazy?: boolean; // Habilita lazy loading
 }
 
-export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
+export const CameraPlayer = ({ cameraUrl, lazy = true, ...rest }: CameraPlayerProps) => {
+    const imgRef = useRef<HTMLImageElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
-    const hlsRef = useRef<Hls | null>(null);
+    const [isVisible, setIsVisible] = useState(!lazy); // Se lazy=false, carrega imediatamente
     
     // Estado para controle de retry
     const [retryState, setRetryState] = useState({ 
@@ -18,80 +19,98 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
         lastError: null as string | null 
     });
 
-    // Configuração HLS.js
+    // Intersection Observer para lazy loading
     useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
+        if (!lazy) return;
+        
+        const currentBox = boxRef.current;
+        if (!currentBox) return;
 
-        // Limpa instância anterior do HLS
-        if (hlsRef.current) {
-            hlsRef.current.destroy();
-            hlsRef.current = null;
-        }
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setIsVisible(true);
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.1 }
+        );
 
-        if (Hls.isSupported()) {
-            console.log('[CameraPlayer] Usando HLS.js para:', hlsUrl);
-            const hls = new Hls({
-                enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 30, // Reduzido para menos buffer
-                maxBufferLength: 60, // Buffer máximo menor
-                maxMaxBufferLength: 90, // Buffer máximo absoluto menor
-                startLevel: -1, // Autoselect quality mais rápido
-                maxLoadingDelay: 1000, // Delay máximo de carregamento reduzido
-                manifestLoadingTimeOut: 5000, // Timeout do manifest reduzido
-                fragLoadingTimeOut: 10000, // Timeout de fragmento reduzido
-                liveSyncDuration: 2, // Sincronização mais agressiva
-                liveMaxLatencyDuration: 5, // Latência máxima reduzida
-                progressive: true // Habilita carregamento progressivo
-            });
-            
-            hlsRef.current = hls;
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
-            
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                console.log('[CameraPlayer] HLS manifest carregado');
-                // Não marca como loaded aqui, espera pelos dados
-            });
+        observer.observe(currentBox);
+        
+        return () => observer.disconnect();
+    }, [lazy]);
 
-            // Esconde loading quando primeiro fragmento começar a carregar
-            hls.on(Hls.Events.FRAG_LOADING, () => {
-                console.log('[CameraPlayer] Carregando primeiro fragmento');
-                setRetryState({ isRetrying: false, lastError: null });
-            });
+    // Configuração de imagem MJPEG via proxy
+    useEffect(() => {
+        if (!isVisible) return;
+        
+        const img = imgRef.current;
+        if (!img) return;
 
-            // Fallback: sucesso quando dados estão prontos
-            hls.on(Hls.Events.FRAG_LOADED, () => {
-                setRetryState({ isRetrying: false, lastError: null });
-            });
-            
-            hls.on(Hls.Events.ERROR, (_, data) => {
-                console.error('[CameraPlayer] Erro HLS:', data);
-                if (data.fatal) {
-                    setRetryState({ isRetrying: true, lastError: `HLS Error: ${data.type}` });
+        let connectionAcquired = false;
+
+        const loadCamera = async () => {
+            try {
+                // Solicita uma conexão do pool
+                await connectionPool.requestConnection(cameraUrl);
+                connectionAcquired = true;
+
+                console.log('[CameraPlayer] Carregando câmera via proxy:', cameraUrl);
+                
+                // Configurar source diretamente para MJPEG
+                img.src = cameraUrl;
+                
+                const onLoad = () => {
+                    console.log('[CameraPlayer] Imagem carregada com sucesso');
+                    setRetryState({ isRetrying: false, lastError: null });
+                };
+                
+                const onError = () => {
+                    console.error('[CameraPlayer] Erro ao carregar imagem');
+                    setRetryState({ isRetrying: true, lastError: 'Erro de carregamento' });
+                    
                     // Retry após 5 segundos
                     setTimeout(() => {
-                        hls.loadSource(hlsUrl);
+                        if (img.src) {
+                            img.src = cameraUrl + '?t=' + Date.now(); // Force reload com timestamp
+                        }
                     }, 5000);
-                }
-            });
-            
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            console.log('[CameraPlayer] Usando HLS nativo para:', hlsUrl);
-            video.src = hlsUrl;
-        } else {
-            console.warn('[CameraPlayer] HLS não suportado');
-            setRetryState({ isRetrying: false, lastError: 'HLS não suportado' });
-        }
+                };
+                
+                const onLoadStart = () => {
+                    console.log('[CameraPlayer] Iniciando carregamento da imagem');
+                    setRetryState({ isRetrying: false, lastError: null });
+                };
 
-        return () => {
-            if (hlsRef.current) {
-                hlsRef.current.destroy();
-                hlsRef.current = null;
+                img.addEventListener('load', onLoad);
+                img.addEventListener('error', onError);
+                img.addEventListener('loadstart', onLoadStart);
+                
+                return () => {
+                    img.removeEventListener('load', onLoad);
+                    img.removeEventListener('error', onError);
+                    img.removeEventListener('loadstart', onLoadStart);
+                    
+                    // Libera a conexão do pool
+                    if (connectionAcquired) {
+                        connectionPool.releaseConnection(cameraUrl);
+                    }
+                };
+            } catch (error) {
+                console.error('[CameraPlayer] Erro ao adquirir conexão:', error);
+                setRetryState({ isRetrying: true, lastError: 'Pool de conexões esgotado' });
             }
         };
-    }, [hlsUrl]);
+
+        const cleanup = loadCamera();
+        
+        return () => {
+            if (cleanup) {
+                cleanup.then(cleanupFn => cleanupFn?.());
+            }
+        };
+    }, [cameraUrl, isVisible]);
 
     return (
         <Box
@@ -110,7 +129,7 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
                     outline: '2px solid white',
                     outlineOffset: '-2px',
                 },
-                '& video': {
+                '& img': {
                     maxWidth: '100% !important',
                     maxHeight: '100% !important',
                     objectFit: 'fill !important',
@@ -118,17 +137,30 @@ export const CameraPlayer = ({ hlsUrl, ...rest }: CameraPlayerProps) => {
                 }
             }}
         >
-            <video
-                ref={videoRef}
-                controls={false}
-                autoPlay
-                muted
-                playsInline
-                preload="metadata"
-                crossOrigin="anonymous"
-                style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
-                {...rest}
-            />
+            {!isVisible ? (
+                // Placeholder quando não carregada
+                <Box
+                    sx={{
+                        width: '100%',
+                        height: '100%',
+                        background: '#1a1a1a',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#666',
+                        fontSize: '12px'
+                    }}
+                >
+                    Carregando...
+                </Box>
+            ) : (
+                <img
+                    ref={imgRef}
+                    crossOrigin="anonymous"
+                    style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
+                    {...rest}
+                />
+            )}
             
             {/* Ícone discreto de retry */}
             {retryState.isRetrying && (

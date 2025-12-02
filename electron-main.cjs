@@ -12,7 +12,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: false, // Permite acesso a conteúdo de outras origens (necessário para HLS)
+      webSecurity: false, // Permite acesso a conteúdo de outras origens (necessário para proxy de câmeras)
       allowRunningInsecureContent: true, // Permite conteúdo HTTP em contexto HTTPS
       experimentalFeatures: true // Habilita recursos experimentais do Chromium
     },

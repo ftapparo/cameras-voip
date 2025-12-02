@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Snapshot Player</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #333;
+            color: white;
+            padding: 20px;
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .camera-box {
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 10px;
+            background: #222;
+        }
+        .camera-title {
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .camera-img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            background: #111;
+        }
+        .status {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #888;
+        }
+        .loading {
+            color: #FFC107;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .error {
+            color: #F44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Teste do Sistema de Snapshots</h1>
+    <p>Testando o controle de carregamento e polling otimizado</p>
+    
+    <div class="camera-grid">
+        <div class="camera-box">
+            <div class="camera-title">Câmera 1 - Entrada Principal</div>
+            <img id="cam1" class="camera-img" alt="Câmera 1" />
+            <div class="status" id="status1">Carregando...</div>
+        </div>
+        
+        <div class="camera-box">
+            <div class="camera-title">Câmera 2 - Clausura</div>
+            <img id="cam2" class="camera-img" alt="Câmera 2" />
+            <div class="status" id="status2">Carregando...</div>
+        </div>
+        
+        <div class="camera-box">
+            <div class="camera-title">Câmera 3 - Entrada Veículos</div>
+            <img id="cam3" class="camera-img" alt="Câmera 3" />
+            <div class="status" id="status3">Carregando...</div>
+        </div>
+        
+        <div class="camera-box">
+            <div class="camera-title">Câmera 4 - Saída Veículos</div>
+            <img id="cam4" class="camera-img" alt="Câmera 4" />
+            <div class="status" id="status4">Carregando...</div>
+        </div>
+    </div>
+
+    <script>
+        // Sistema de controle sequencial simulando o CameraSequencer React
+        class CameraSequencer {
+            constructor() {
+                this.cameras = new Map();
+                this.sequence = [];
+                this.currentIndex = 0;
+                this.isRunning = false;
+                this.intervalId = null;
+                this.DELAY_MS = 200; // Delay obrigatório entre câmeras
+            }
+            
+            registerCamera(camera) {
+                this.cameras.set(camera.id, camera);
+                this.sequence.push(camera.id);
+                console.log(`[CameraSequencer] Câmera ${camera.id} registrada. Total: ${this.cameras.size}`);
+                
+                // Inicia automaticamente se não estiver rodando
+                if (!this.isRunning) {
+                    this.start();
+                }
+            }
+            
+            start() {
+                if (this.isRunning || this.sequence.length === 0) {
+                    return;
+                }
+                
+                this.isRunning = true;
+                this.currentIndex = 0;
+                console.log(`[CameraSequencer] 🚀 Iniciando sequenciamento com ${this.sequence.length} câmeras (delay: ${this.DELAY_MS}ms)`);
+                
+                this.processNextCamera();
+            }
+            
+            async processNextCamera() {
+                if (!this.isRunning || this.sequence.length === 0) {
+                    return;
+                }
+                
+                const cameraId = this.sequence[this.currentIndex];
+                const camera = this.cameras.get(cameraId);
+                
+                if (camera) {
+                    await this.fetchSnapshot(camera);
+                }
+                
+                // Move para próxima câmera (circular)
+                this.currentIndex = (this.currentIndex + 1) % this.sequence.length;
+                
+                // Agenda próxima execução com delay obrigatório
+                this.intervalId = setTimeout(() => {
+                    this.processNextCamera();
+                }, this.DELAY_MS);
+            }
+            
+            async fetchSnapshot(camera) {
+                const startTime = Date.now();
+                
+                try {
+                    const url = `${camera.snapshotUrl}?_t=${Date.now()}`;
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const imageUrl = URL.createObjectURL(blob);
+                        
+                        // Libera URL anterior
+                        if (camera.currentImageUrl) {
+                            URL.revokeObjectURL(camera.currentImageUrl);
+                        }
+                        camera.currentImageUrl = imageUrl;
+                        
+                        camera.onUpdate(imageUrl);
+                        
+                        const duration = Date.now() - startTime;
+                        console.log(`[CameraSequencer] ✅ Câmera ${camera.id} atualizada em ${duration}ms`);
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                } catch (error) {
+                    const duration = Date.now() - startTime;
+                    const errorMessage = error.message || 'Erro desconhecido';
+                    
+                    console.error(`[CameraSequencer] ❌ Erro na câmera ${camera.id} após ${duration}ms:`, errorMessage);
+                    camera.onError(errorMessage);
+                }
+            }
+            
+            getStats() {
+                return {
+                    totalCameras: this.cameras.size,
+                    currentIndex: this.currentIndex,
+                    currentCamera: this.sequence[this.currentIndex],
+                    isRunning: this.isRunning,
+                    delayMs: this.DELAY_MS
+                };
+            }
+        }
+        
+        // Instância global do sequenciador
+        const globalSequencer = new CameraSequencer();
+        
+        // Controlador individual de câmera
+        class SnapshotController {
+            constructor(imgId, statusId, cameraId) {
+                this.img = document.getElementById(imgId);
+                this.status = document.getElementById(statusId);
+                this.cameraId = cameraId;
+                this.currentImageUrl = null;
+                
+                this.init();
+            }
+            
+            init() {
+                console.log(`Registrando câmera ${this.cameraId} no sequenciador global`);
+                
+                // Registra no sequenciador global
+                globalSequencer.registerCamera({
+                    id: this.cameraId,
+                    snapshotUrl: `http://localhost:3001/snapshot/${this.cameraId}`,
+                    onUpdate: (imageUrl) => this.handleUpdate(imageUrl),
+                    onError: (error) => this.handleError(error),
+                    currentImageUrl: null
+                });
+                
+                // Configura handlers da imagem
+                this.img.onload = () => {
+                    console.log(`[${this.cameraId}] Imagem carregada no DOM`);
+                };
+                
+                this.img.onerror = () => {
+                    console.error(`[${this.cameraId}] Erro ao exibir imagem`);
+                    this.updateStatus('❌ Erro na exibição', 'error');
+                };
+            }
+            
+            handleUpdate(imageUrl) {
+                this.img.src = imageUrl;
+                this.updateStatus(`✅ OK (${new Date().toLocaleTimeString()})`, 'success');
+                console.log(`[${this.cameraId}] ✅ Imagem atualizada via sequenciador`);
+            }
+            
+            handleError(error) {
+                this.updateStatus(`❌ ${error}`, 'error');
+                console.error(`[${this.cameraId}] ❌ Erro via sequenciador:`, error);
+            }
+            
+            updateStatus(message, type) {
+                this.status.textContent = message;
+                this.status.className = `status ${type}`;
+            }
+        }
+        
+        // Mapeia câmeras com seus IPs
+        const cameras = [
+            { imgId: 'cam1', statusId: 'status1', cameraId: '103' },
+            { imgId: 'cam2', statusId: 'status2', cameraId: '108' },
+            { imgId: 'cam3', statusId: 'status3', cameraId: '110' },
+            { imgId: 'cam4', statusId: 'status4', cameraId: '111' }
+        ];
+        
+        // Inicia controladores para todas as câmeras
+        const controllers = cameras.map(cam => 
+            new SnapshotController(cam.imgId, cam.statusId, cam.cameraId)
+        );
+        
+        // Exibe estatísticas do sequenciador a cada 2 segundos
+        setInterval(() => {
+            const stats = globalSequencer.getStats();
+            console.log(`[Stats] 📊 Câmeras: ${stats.totalCameras}, Atual: ${stats.currentCamera} (${stats.currentIndex + 1}/${stats.totalCameras}), Delay: ${stats.delayMs}ms`);
+        }, 2000);
+        
+        console.log('🎯 Sistema sequencial iniciado! Uma câmera por vez com delay de 200ms');
+    </script>
+</body>
+</html>

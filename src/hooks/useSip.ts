@@ -105,9 +105,19 @@ export const useSip = (props?: UseSipProps) => {
     useEffect(() => {
         const checkMicrophone = async () => {
             try {
+                console.log('[Microfone] Iniciando verificação de dispositivos...');
+                
                 // Verifica se há dispositivos de áudio disponíveis
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                
+                console.log(`[Microfone] Total de dispositivos encontrados: ${devices.length}`);
+                console.log(`[Microfone] Dispositivos de entrada de áudio: ${audioInputs.length}`);
+                
+                // Lista os dispositivos para debug
+                audioInputs.forEach((device, index) => {
+                    console.log(`[Microfone] Dispositivo ${index + 1}: ${device.label || 'Dispositivo sem nome'} (${device.deviceId})`);
+                });
 
                 if (audioInputs.length > 0) {
                     console.log(`[Microfone] ${audioInputs.length} microfone(s) detectado(s)`);
@@ -115,20 +125,20 @@ export const useSip = (props?: UseSipProps) => {
                     // Pede permissão para usar o microfone
                     try {
                         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        console.log('[Microfone] Permissão concedida');
+                        console.log('[Microfone] ✅ Permissão concedida - microfone funcionando');
                         setHasMicrophone(true);
                         // Para o stream imediatamente, só queríamos verificar a permissão
                         stream.getTracks().forEach(track => track.stop());
                     } catch (permissionError) {
-                        console.warn('[Microfone] Permissão negada ou erro:', permissionError);
+                        console.warn('[Microfone] ❌ Permissão negada ou erro:', permissionError);
                         setHasMicrophone(false);
                     }
                 } else {
-                    console.log('[Microfone] Nenhum microfone detectado');
+                    console.log('[Microfone] ❌ Nenhum microfone detectado');
                     setHasMicrophone(false);
                 }
             } catch (error) {
-                console.error('[Microfone] Erro ao verificar dispositivos:', error);
+                console.error('[Microfone] ❌ Erro ao verificar dispositivos:', error);
                 setHasMicrophone(false);
             }
         };
@@ -634,6 +644,13 @@ export const useSip = (props?: UseSipProps) => {
         console.log('[SIP] Iniciando makeCall para:', destination);
         console.log('[SIP] Microfone disponível:', hasMicrophone);
         
+        if (!hasMicrophone) {
+            console.warn('[SIP] ⚠️  ATENÇÃO: Microfone não disponível - áudio será apenas de recepção!');
+            console.warn('[SIP] Para áudio bidirecional, verifique permissões de microfone');
+        } else {
+            console.log('[SIP] ✅ Microfone disponível - áudio bidirecional habilitado');
+        }
+        
         // Registra chamada sainte no histórico
         const callRecord = {
             extension: destination,
@@ -654,18 +671,19 @@ export const useSip = (props?: UseSipProps) => {
         }));
 
         // Constraints simples - Issabel/Asterisk pode rejeitar constraints complexas
-        // Modo receive-only para computadores sem microfone
+        // Usa microfone quando disponível para chamadas originadas
         const mediaConstraints = {
-            audio: false, // Sem áudio local - apenas recebe
+            audio: hasMicrophone, // ✅ CORRIGIDO: Usa microfone quando disponível
             video: false
         };
 
         console.log('[SIP] Media constraints:', mediaConstraints);
+        console.log('[SIP] Microfone será usado:', hasMicrophone);
 
-        // Não usar rtcOfferConstraints - deixar o JsSIP configurar automaticamente
+        // Configurações para comunicação bidirecional
         const session = uaRef.current.call(destination, {
             mediaConstraints: mediaConstraints,
-            // Configurações específicas para receive-only
+            // Configurações para áudio bidirecional
             rtcOfferConstraints: {
                 offerToReceiveAudio: true, // QUER receber áudio
                 offerToReceiveVideo: false  // Não quer vídeo
@@ -899,6 +917,12 @@ export const useSip = (props?: UseSipProps) => {
 
             console.log('[SIP] Respondendo chamada, session ID:', session?.id);
             console.log('[SIP] Microfone disponível:', hasMicrophone);
+
+            if (!hasMicrophone) {
+                console.warn('[SIP] ⚠️  ATENÇÃO: Microfone não disponível - apenas áudio de recepção!');
+            } else {
+                console.log('[SIP] ✅ Microfone disponível - áudio bidirecional habilitado');
+            }
 
             // Constraints simples - Issabel/Asterisk pode rejeitar constraints complexas
             const mediaConstraints = {

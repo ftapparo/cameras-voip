@@ -1,21 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import axios from 'axios';
-import { CameraPlayer } from '../../components/CameraPlayer/CameraPlayer';
-import { VoipCamera } from '../../components/VoipCamera/VoipCamera';
+import { WebSocketPlayer } from '../../components/WebSocketPlayer/WebSocketPlayer';
+import { WebSocketVoip } from '../../components/WebSocketVoip/WebSocketVoip';
 import { IncomingCall } from '../../components/IncomingCall/IncomingCall';
 import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
 import { useSip } from '../../hooks/useSip';
+import { useCameras } from '../../hooks/useCameras';
 import { Box, Typography } from '@mui/material';
 import { useVoipCamera } from '../../contexts/VoipCameraContext';
 
-interface Camera {
-    name: string;
-    confName: string;
-    extension?: string;
-    description?: string;
-}
-
 const Home: React.FC = () => {
+    // Hook para câmeras
+    const { cameras, loading: camerasLoading, findCameraByExtension } = useCameras();
+    
+    // Debug: log das câmeras
+    useEffect(() => {
+        console.log('[Home] Câmeras atualizadas:', {
+            count: cameras.length,
+            cameras: cameras.map(c => ({ id: c.id, name: c.name, url: c.url }))
+        });
+    }, [cameras]);
     // Refs para elementos de áudio
     const phoneRingRef = useRef<HTMLAudioElement>(null);
     const phoneCallRef = useRef<HTMLAudioElement>(null);
@@ -39,11 +42,8 @@ const Home: React.FC = () => {
         onCallEnded: playEndCallSound
     });
     const { setVoipCameraLoading } = useVoipCamera();
-    const [cameras, setCameras] = useState<Camera[]>([]);
-    const [, setLoading] = useState(true);
- 
+    
     // Estado para a área VoIP
-    const [voipUrl, setVoipUrl] = useState<string | undefined>(undefined);
     const [voipKey, setVoipKey] = useState(0);
     const [voipCameraId, setVoipCameraId] = useState<string | undefined>(undefined);
 
@@ -78,53 +78,12 @@ const Home: React.FC = () => {
     }, [remoteAudioRef]);     
     
     // Carregar câmeras da API
+    // Efeito para configurar estado de loading baseado nas câmeras
     useEffect(() => {
-        const fetchCameras = async () => {
-            try {
-                const response = await axios.get('http://192.168.0.250:9997/v3/paths/list');
-                
-                // Processa as câmeras para extrair o ramal do nome
-                const processedCameras = response.data.items.map((item: unknown) => {
-                    const camera = item as Camera;
-                    const nameParts = camera.name.split('_');
-                    const extension = nameParts.length > 1 && nameParts[1] !== '0' ? nameParts[1] : undefined;
-                    
-                    return {
-                        ...camera,
-                        extension: extension,
-                        description: (extension ? `Ramal ${extension}` : 'Sem interfone')
-                    };
-                });
-                
-                // Ordena as câmeras por nome (cam1, cam2, cam3, ...)
-                const sortedCameras = processedCameras.sort((a: Camera, b: Camera) => {
-                    // Extrai o número da câmera do nome (cam1 -> 1, cam10 -> 10)
-                    const getNumber = (name: string) => {
-                        const match = name.match(/cam(\d+)/);
-                        return match ? parseInt(match[1], 10) : 0;
-                    };
-                    
-                    return getNumber(a.name) - getNumber(b.name);
-                });
-                
-                setCameras(sortedCameras);
-                setLoading(false);
-                setVoipCameraLoading(false);
-          
-            } catch (error) {
-                console.error('Erro ao carregar câmeras:', error);
-                setLoading(false);
-                setVoipCameraLoading(false);
-            }
-        };
-
-        fetchCameras();
-    }, [setVoipCameraLoading]);
-   
-    // Monta a URL HLS da câmera
-    const getCameraUrl = (cameraName: string) => {
-        return `http://192.168.0.250:8888/${cameraName}/index.m3u8`;
-    };
+        if (!camerasLoading) {
+            setVoipCameraLoading(false);
+        }
+    }, [camerasLoading, setVoipCameraLoading]);
 
     // Callback para quando o VoipCamera termina de carregar
     const handleVoipCameraLoadingComplete = useCallback(() => {
@@ -159,19 +118,19 @@ const Home: React.FC = () => {
     }, [hangup]);
 
     // Função para lidar com o clique em uma câmera pequena
-    const handleCameraClick = (cameraName: string) => {
+    const handleCameraClick = (cameraId: string) => {
         // Bloqueia troca de câmera durante chamadas
         if (status.incomingCall || status.inCall || isOutgoingCall) {
             console.log('Troca de câmera bloqueada durante chamada');
             return;
         }
 
-        const hlsUrl = getCameraUrl(cameraName);
-        console.log(`Câmera ${cameraName} clicada. URL HLS: ${hlsUrl}`);
-
-        setVoipUrl(hlsUrl);
-        setVoipCameraId(cameraName); // Armazena o nome da câmera atual
-        setVoipKey(prev => prev + 1); // Incrementa key para forçar remontagem
+        const camera = cameras.find(c => c.id === cameraId);
+        if (camera) {
+            console.log(`Câmera ${camera.name} clicada. URL Proxy: ${camera.url}`);
+            setVoipCameraId(cameraId);
+            setVoipKey(prev => prev + 1);
+        }
     };
 
     // Função para iniciar chamada sainte (outgoing call)
@@ -180,7 +139,7 @@ const Home: React.FC = () => {
         console.log('Iniciando chamada sainte para câmera:', voipCameraId);
 
         // Encontra a câmera correspondente ao voipCameraId atual
-        const currentCamera = cameras.find(cam => cam.name === voipCameraId);
+        const currentCamera = cameras.find(cam => cam.id === voipCameraId);
 
         // Verifica se a câmera tem extension (tem interfone)
         if (!currentCamera) {
@@ -211,19 +170,17 @@ const Home: React.FC = () => {
             const callerExtension = status.incomingCall.callerExtension;
 
             // Verifica se o ramal corresponde a uma câmera
-            const camera = cameras.find(cam => cam.extension === callerExtension);
+            const camera = findCameraByExtension(callerExtension);
 
             if (camera) {
-                // Carrega a câmera
-                const hlsUrl = getCameraUrl(camera.name);
-
+                console.log(`[Home] Câmera encontrada para ramal ${status.incomingCall.callerExtension}: ${camera.name}`);
+                
                 // Só atualiza se for uma câmera diferente
-                if (voipUrl !== hlsUrl) {
+                if (voipCameraId !== camera.id) {
                     // Usar setTimeout para agendar setState fora do effect
                     setTimeout(() => {
-                        setVoipUrl(hlsUrl);
+                        setVoipCameraId(camera.id);
                         setVoipKey(prev => prev + 1);
-                        setVoipCameraId(camera.name); // Atualiza o ID da câmera ativa para o ramal que está chamando
                     }, 100);
                 }
                 setTimeout(() => setActiveCallExtension(undefined), 100); // Limpa chamada sem câmera se houver
@@ -231,7 +188,7 @@ const Home: React.FC = () => {
                 // Marca que há uma chamada de ramal sem câmera
                 setTimeout(() => {
                     setActiveCallExtension(callerExtension);
-                    setVoipUrl(undefined);
+                    setVoipCameraId(undefined);
                 }, 100);
             }
 
@@ -247,7 +204,7 @@ const Home: React.FC = () => {
                 setIsOutgoingCall(false);
             }, 100);
         }
-    }, [status.incomingCall, status.inCall, cameras, activeCallExtension, voipUrl]);
+    }, [status.incomingCall, status.inCall, findCameraByExtension, activeCallExtension, voipCameraId]);
 
     // Tocar som quando receber chamada entrante (phone-ring.mp3)
     useEffect(() => {
@@ -357,14 +314,13 @@ const Home: React.FC = () => {
                 >
                     {status.incomingCall ? (
                         // Há uma chamada recebida
-                        voipUrl ? (
-                            // Câmera identificada - mostra VoipCamera com botões Atender/Recusar
-                            <VoipCamera
+                        voipCameraId ? (
+                            // Câmera identificada - mostra WebSocketVoip com botões Atender/Recusar
+                            <WebSocketVoip
                                 key={voipKey}
-                                hlsUrl={voipUrl}
+                                cameraId={voipCameraId}
                                 onClick={answerCall}
                                 isIncomingCall={true}
-                                callConfirmed={status.callConfirmed}
                                 onReject={handleRejectCall}
                                 onLoadingComplete={handleVoipCameraLoadingComplete}
                             />
@@ -372,18 +328,17 @@ const Home: React.FC = () => {
                             // Ramal sem câmera - mostra IncomingCall
                             <IncomingCall
                                 callerExtension={status.incomingCall.callerExtension}
-                                description={cameras.find(c => c.extension === status.incomingCall?.callerExtension)?.description}
+                                description={findCameraByExtension(status.incomingCall?.callerExtension)?.name}
                                 onAnswer={answerCall}
                                 isInCall={false}
                             />
                         )
-                    ) : status.inCall && voipUrl ? (
-                        // Chamada ativa com câmera - mostra VoipCamera com botão ENCERRAR
-                        <VoipCamera
+                    ) : status.inCall && voipCameraId ? (
+                        // Chamada ativa com câmera - mostra WebSocketVoip com botão ENCERRAR
+                        <WebSocketVoip
                             key={voipKey}
-                            hlsUrl={voipUrl}
+                            cameraId={voipCameraId}
                             isInCall={true}
-                            callConfirmed={status.callConfirmed}
                             onHangup={handleSafeHangup}
                             onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
@@ -391,28 +346,27 @@ const Home: React.FC = () => {
                         // Chamada ativa de ramal sem câmera
                         <IncomingCall
                             callerExtension={activeCallExtension}
-                            description={cameras.find(c => c.extension === activeCallExtension)?.description}
+                            description={findCameraByExtension(activeCallExtension)?.name}
                             onAnswer={answerCall}
                             isInCall={true}
                             onHangup={handleSafeHangup}
                         />
-                    ) : isOutgoingCall && voipUrl ? (
+                    ) : isOutgoingCall && voipCameraId ? (
                         // Chamada sainte em progresso (outgoing call)
-                        <VoipCamera
+                        <WebSocketVoip
                             key={voipKey}
-                            hlsUrl={voipUrl}
+                            cameraId={voipCameraId}
                             isOutgoingCall={true}
-                            callConfirmed={status.callConfirmed}
                             onHangup={handleSafeHangup}
                             onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
-                    ) : voipUrl ? (
+                    ) : voipCameraId ? (
                         // Câmera selecionada manualmente (sem chamada)
-                        <VoipCamera
+                        <WebSocketVoip
                             key={voipKey}
-                            hlsUrl={voipUrl}
-                            onClick={cameras.find(c => c.name === voipCameraId)?.extension ? handleOutgoingCall : undefined}
-                            hasVoip={!!cameras.find(c => c.name === voipCameraId)?.extension}
+                            cameraId={voipCameraId}
+                            onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
+                            hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
                             onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : (
@@ -453,8 +407,7 @@ const Home: React.FC = () => {
 
                     return (
                         <Box
-                            key={cam.name}
-                            onClick={() => handleCameraClick(cam.name)}
+                            key={cam.id}
                             sx={{
                                 gridColumn,
                                 gridRow,
@@ -469,13 +422,15 @@ const Home: React.FC = () => {
                                 justifyContent: 'stretch',
                                 minWidth: 0,
                                 minHeight: 0,
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                transition: 'opacity 0.3s ease, cursor 0.3s ease'
+                                overflow: 'hidden'
                             }}
-                            title={cam.description || cam.name}
+                            title={cam.name || cam.id}
                         >
-                            <CameraPlayer hlsUrl={getCameraUrl(cam.name)} style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }} />
+                            <WebSocketPlayer 
+                                cameraId={cam.id}
+                                onClick={() => handleCameraClick(cam.id)}
+                                style={{ width: '100%', height: '100%', objectFit: 'fill', background: '#000' }}
+                            />
                         </Box>
                     );
                 })}

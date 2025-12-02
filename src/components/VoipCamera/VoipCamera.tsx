@@ -2,13 +2,13 @@ import { Box, Chip, CircularProgress, IconButton } from '@mui/material';
 import { useRef, useEffect, useState } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CallEndIcon from '@mui/icons-material/CallEnd';
+import { connectionPool } from '../../utils/connectionPool';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import Hls from 'hls.js';
 
-interface VoipCameraProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
-    hlsUrl?: string;
+interface VoipCameraProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+    cameraUrl?: string;
     onClick?: () => void;
     isIncomingCall?: boolean;
     isInCall?: boolean;
@@ -20,16 +20,15 @@ interface VoipCameraProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
     onLoadingComplete?: () => void; // Callback quando o carregamento termina
 }
 
-export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, callConfirmed = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
+export const VoipCamera = ({ cameraUrl, onClick, isIncomingCall = false, isInCall = false, isOutgoingCall = false, callConfirmed = false, onReject, onHangup, hasVoip = true, onLoadingComplete, ...rest }: VoipCameraProps) => {
+    const imgRef = useRef<HTMLImageElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
-    const hlsRef = useRef<Hls | null>(null);
     const [isHovering, setIsHovering] = useState(false);
     const [isHoveringCenter, setIsHoveringCenter] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     
     // Estado de loading baseado na URL - resetado quando URL muda
-    const [loadingState, setLoadingState] = useState({ url: hlsUrl, loaded: false });
+    const [loadingState, setLoadingState] = useState({ url: cameraUrl, loaded: false });
     
     // Estado para controle de retry
     const [retryState, setRetryState] = useState({ 
@@ -38,8 +37,8 @@ export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall =
     });
     
     // Se URL mudou, resetar estado
-    if (loadingState.url !== hlsUrl) {
-        setLoadingState({ url: hlsUrl, loaded: false });
+    if (loadingState.url !== cameraUrl) {
+        setLoadingState({ url: cameraUrl, loaded: false });
         setRetryState({ isRetrying: false, lastError: null });
     }
 
@@ -51,125 +50,39 @@ export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall =
     }, [isInCall, isIncomingCall, isOutgoingCall]);
 
     // State derivado: loading quando há URL mas vídeo não carregou
-    const isLoading = Boolean(hlsUrl && !loadingState.loaded);
+    const isLoading = Boolean(cameraUrl && !loadingState.loaded);
 
-    // Configuração HLS.js
+    // Configuração de imagem MJPEG via proxy
     useEffect(() => {
-        const video = videoRef.current;
-        if (!video || !hlsUrl) return;
+        const img = imgRef.current;
+        if (!img || !cameraUrl) return;
 
-        // Limpa instância anterior do HLS
-        if (hlsRef.current) {
-            hlsRef.current.destroy();
-            hlsRef.current = null;
-        }
-
-        if (Hls.isSupported()) {
-            console.log('[VoipCamera] Usando HLS.js para:', hlsUrl);
-            const hls = new Hls({
-                enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 30, // Reduzido para menos buffer
-                maxBufferLength: 60, // Buffer máximo menor
-                maxMaxBufferLength: 90, // Buffer máximo absoluto menor
-                startLevel: -1, // Autoselect quality mais rápido
-                maxLoadingDelay: 1000, // Delay máximo de carregamento reduzido
-                manifestLoadingTimeOut: 5000, // Timeout do manifest reduzido
-                fragLoadingTimeOut: 10000, // Timeout de fragmento reduzido
-                liveSyncDuration: 2, // Sincronização mais agressiva
-                liveMaxLatencyDuration: 5, // Latência máxima reduzida
-                progressive: true // Habilita carregamento progressivo
-            });
-            
-            hlsRef.current = hls;
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
-            
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                console.log('[VoipCamera] HLS manifest carregado');
-                // Não marca como loaded aqui, espera pelos dados
-            });
-
-            // Esconde loading quando primeiro fragmento começar a carregar
-            hls.on(Hls.Events.FRAG_LOADING, () => {
-                console.log('[VoipCamera] Carregando primeiro fragmento');
-                setLoadingState(prev => ({ ...prev, loaded: true }));
-                setRetryState({ isRetrying: false, lastError: null });
-                if (onLoadingComplete) {
-                    onLoadingComplete();
-                }
-            });
-
-            // Fallback: esconde loading quando dados estão prontos
-            hls.on(Hls.Events.FRAG_LOADED, () => {
-                setLoadingState(prev => ({ ...prev, loaded: true }));
-                if (onLoadingComplete) {
-                    onLoadingComplete();
-                }
-            });
-            
-            hls.on(Hls.Events.ERROR, (_, data) => {
-                console.error('[VoipCamera] Erro HLS:', data);
-                setLoadingState(prev => ({ ...prev, loaded: true })); // Para esconder loading
-                
-                if (data.fatal) {
-                    setRetryState({ isRetrying: true, lastError: `HLS Error: ${data.type}` });
-                    // Retry após 5 segundos
-                    setTimeout(() => {
-                        hls.loadSource(hlsUrl);
-                    }, 5000);
-                }
-                
-                if (onLoadingComplete) {
-                    onLoadingComplete();
-                }
-            });
-            
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            console.log('[VoipCamera] Usando HLS nativo para:', hlsUrl);
-            video.src = hlsUrl;
-            
-            const onLoadedData = () => {
-                setLoadingState(prev => ({ ...prev, loaded: true }));
-                setRetryState({ isRetrying: false, lastError: null });
-                if (onLoadingComplete) {
-                    onLoadingComplete();
-                }
-            };
-            
-            const onError = () => {
-                setLoadingState(prev => ({ ...prev, loaded: true }));
-                setRetryState({ isRetrying: false, lastError: 'Erro de carregamento' });
-                if (onLoadingComplete) {
-                    onLoadingComplete();
-                }
-            };
-            
-            video.addEventListener('loadeddata', onLoadedData);
-            video.addEventListener('error', onError);
-            
-            return () => {
-                video.removeEventListener('loadeddata', onLoadedData);
-                video.removeEventListener('error', onError);
-            };
-        } else {
-            console.warn('[VoipCamera] HLS não suportado');
-            setTimeout(() => {
-                setLoadingState(prev => ({ ...prev, loaded: true }));
-                setRetryState({ isRetrying: false, lastError: 'HLS não suportado' });
-                if (onLoadingComplete) {
-                    onLoadingComplete();
-                }
-            }, 0);
-        }
-
-        return () => {
-            if (hlsRef.current) {
-                hlsRef.current.destroy();
-                hlsRef.current = null;
-            }
+        console.log('[VoipCamera] Carregando câmera via proxy:', cameraUrl);
+        
+        // Configurar source diretamente
+        img.src = cameraUrl;
+        
+        const onLoad = () => {
+            console.log('[VoipCamera] Imagem carregada com sucesso');
+            setLoadingState({ url: cameraUrl, loaded: true });
+            setRetryState({ isRetrying: false, lastError: null });
+            onLoadingComplete?.();
         };
-    }, [onLoadingComplete, hlsUrl]);
+        
+        const onError = () => {
+            console.error('[VoipCamera] Erro ao carregar imagem');
+            setRetryState({ isRetrying: false, lastError: 'Erro de carregamento' });
+            onLoadingComplete?.();
+        };
+
+        img.addEventListener('load', onLoad);
+        img.addEventListener('error', onError);
+        
+        return () => {
+            img.removeEventListener('load', onLoad);
+            img.removeEventListener('error', onError);
+        };
+    }, [cameraUrl, onLoadingComplete]);
 
     return (
         <Box
@@ -224,13 +137,8 @@ export const VoipCamera = ({ hlsUrl, onClick, isIncomingCall = false, isInCall =
                 }
             }}
         >
-            <video
-                ref={videoRef}
-                controls={false}
-                autoPlay
-                muted
-                playsInline
-                preload="metadata"
+            <img
+                ref={imgRef}
                 crossOrigin="anonymous"
                 style={{ width: '100%', height: '100%', display: 'block', ...rest.style }}
                 {...rest}
