@@ -7,31 +7,44 @@
   "files": [
     "dist/**",
     "electron-main.cjs",
+    "preload.js",
     "public/**",
     "camera-proxy-server.mjs",
     "cameras.conf",
     "proxy-digest.js",
-    "config-helper.mjs",
     "node_modules/express/**",
     "node_modules/cors/**",
     "node_modules/ini/**",
-    "node_modules/ws/**"
+    "node_modules/ws/**",
+    "!node_modules/**/test/**",
+    "!node_modules/**/tests/**",
+    "!node_modules/**/*.md",
+    "!node_modules/**/README*",
+    "!node_modules/**/CHANGELOG*",
+    "!node_modules/**/.git*"
   ],
   "asarUnpack": [
+    "preload.js",
     "camera-proxy-server.mjs",
     "cameras.conf",
-    "config-helper.mjs",
     "proxy-digest.js",
     "node_modules/**/*"
   ],
+  "compression": "maximum",
   "win": {
     "icon": "public/icon-512x512.png",
-    "target": "nsis",
-    "forceCodeSigning": false
+    "target": {
+      "target": "nsis",
+      "arch": ["x64"]
+    },
+    "forceCodeSigning": false,
+    "requestedExecutionLevel": "asInvoker"
   },
   "nsis": {
     "oneClick": true,
     "perMachine": true,
-    "allowToChangeInstallationDirectory": false
+    "allowToChangeInstallationDirectory": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
   }
 }

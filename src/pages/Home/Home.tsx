@@ -6,11 +6,10 @@ import { SipStatusBar } from '../../components/SipStatusBar/SipStatusBar';
 import { useSip } from '../../hooks/useSip';
 import { useCameras } from '../../hooks/useCameras';
 import { Box, Typography } from '@mui/material';
-import { useVoipCamera } from '../../contexts/VoipCameraContext';
 
 const Home: React.FC = () => {
     // Hook para câmeras
-    const { cameras, loading: camerasLoading, findCameraByExtension } = useCameras();
+    const { cameras, findCameraByExtension } = useCameras();
     
     // Debug: log das câmeras
     useEffect(() => {
@@ -41,7 +40,6 @@ const Home: React.FC = () => {
     const { status, remoteAudioRef, connect, answerCall, hangup, makeCall } = useSip({
         onCallEnded: playEndCallSound
     });
-    const { setVoipCameraLoading } = useVoipCamera();
     
     // Estado para a área VoIP
     const [voipKey, setVoipKey] = useState(0);
@@ -55,41 +53,6 @@ const Home: React.FC = () => {
 
     // Ref para prevenir múltiplos hangups simultâneos
     const isHangingUpRef = useRef(false);
-
-    // Debug: log quando o ref é criado
-    useEffect(() => {
-        console.log('[Home] remoteAudioRef:', remoteAudioRef);
-        console.log('[Home] remoteAudioRef.current:', remoteAudioRef?.current);
-
-        // Garantir que o elemento audio está no DOM
-        const audioElement = remoteAudioRef?.current;
-        if (audioElement) {
-            if (!audioElement.parentElement) {
-                console.warn('[Home] Adicionando elemento audio ao DOM');
-                document.body.appendChild(audioElement);
-            }
-
-            console.log('[Home] Elemento audio configurado:', {
-                autoplay: audioElement.autoplay,
-                muted: audioElement.muted,
-                parentElement: audioElement.parentElement?.tagName
-            });
-        }
-    }, [remoteAudioRef]);     
-    
-    // Carregar câmeras da API
-    // Efeito para configurar estado de loading baseado nas câmeras
-    useEffect(() => {
-        if (!camerasLoading) {
-            setVoipCameraLoading(false);
-        }
-    }, [camerasLoading, setVoipCameraLoading]);
-
-    // Callback para quando o VoipCamera termina de carregar
-    const handleVoipCameraLoadingComplete = useCallback(() => {
-        console.log('[Home] VoipCamera carregamento completo');
-        setVoipCameraLoading(false);
-    }, [setVoipCameraLoading]);
 
     // Função para rejeitar chamada com áudio
     const handleRejectCall = useCallback(() => {
@@ -322,7 +285,6 @@ const Home: React.FC = () => {
                                 onClick={answerCall}
                                 isIncomingCall={true}
                                 onReject={handleRejectCall}
-                                onLoadingComplete={handleVoipCameraLoadingComplete}
                             />
                         ) : (
                             // Ramal sem câmera - mostra IncomingCall
@@ -340,7 +302,6 @@ const Home: React.FC = () => {
                             cameraId={voipCameraId}
                             isInCall={true}
                             onHangup={handleSafeHangup}
-                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : activeCallExtension ? (
                         // Chamada ativa de ramal sem câmera
@@ -358,7 +319,6 @@ const Home: React.FC = () => {
                             cameraId={voipCameraId}
                             isOutgoingCall={true}
                             onHangup={handleSafeHangup}
-                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : voipCameraId ? (
                         // Câmera selecionada manualmente (sem chamada)
@@ -367,7 +327,6 @@ const Home: React.FC = () => {
                             cameraId={voipCameraId}
                             onClick={cameras.find(c => c.id === voipCameraId)?.extension ? handleOutgoingCall : undefined}
                             hasVoip={!!cameras.find(c => c.id === voipCameraId)?.extension}
-                            onLoadingComplete={handleVoipCameraLoadingComplete}
                         />
                     ) : (
                         // Nenhuma atividade

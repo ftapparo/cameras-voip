@@ -9,8 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:start": "set NODE_ENV=development&& electron .",
-    "electron:build": "npm run build && electron .",
+    "electron:start": "set NODE_ENV=development&& electron . --max-old-space-size=256 --optimize-for-size",
+    "electron:build": "npm run build && electron . --max-old-space-size=192 --optimize-for-size",
     "electron:pack": "npm run build && electron-builder --dir",
     "electron:dist": "npm run build && electron-builder --win --x64",
     "electron:dist-all": "npm run build && electron-builder --win --x64 --publish=never"

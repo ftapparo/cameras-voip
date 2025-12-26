@@ -6,6 +6,83 @@ const http = require('http');
 
 let mainWindow;
 let backendProcess = null;
+let isAppQuitting = false;
+
+// Verificação de instância única mais rigorosa
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  console.log('[Electron] Outra instância já está rodando, encerrando imediatamente...');
+  // Forçar encerramento imediato sem cleanup
+  process.exit(0);
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Se uma segunda instância for iniciada, focar na primeira
+    console.log('[Electron] Segunda instância detectada, focando na janela principal');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.show();
+    }
+  });
+}
+
+// Limpeza periódica de memória mais eficiente
+function cleanupMemory() {
+  if (global.gc && !isAppQuitting) {
+    global.gc();
+    console.log('[Memory] Limpeza de memória executada');
+  }
+  
+  // Log do uso atual de memória apenas se significativo
+  const memUsage = process.memoryUsage();
+  const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+  const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  
+  if (rssMB > 100) { // Só loga se usar mais que 100MB
+    console.log(`[Memory] RSS: ${rssMB}MB, Heap: ${heapMB}MB`);
+  }
+}
+
+// Executar limpeza a cada 5 minutos (menos freqüente para economizar CPU)
+let memoryCleanupInterval = setInterval(cleanupMemory, 5 * 60 * 1000);
+
+// Função para encontrar o caminho do preload script
+function findPreloadPath() {
+  const isDev = !app.isPackaged;
+  
+  const possiblePaths = [
+    // 1. Desenvolvimento
+    path.join(__dirname, 'preload.js'),
+    // 2. Build local (npm run electron:build)  
+    path.join(process.cwd(), 'preload.js'),
+    // 3. Aplicação instalada - resources/app
+    path.join(process.resourcesPath, 'app', 'preload.js'),
+    // 4. Aplicação instalada - resources/app.asar.unpacked
+    path.join(process.resourcesPath, 'app.asar.unpacked', 'preload.js'),
+    // 5. Aplicação instalada - mesmo diretório do executável
+    path.join(path.dirname(process.execPath), 'preload.js'),
+    // 6. Aplicação instalada - resources
+    path.join(process.resourcesPath, 'preload.js'),
+    // 7. App path
+    path.join(app.getAppPath(), 'preload.js')
+  ];
+  
+  console.log('[Preload] Procurando preload.js...');
+  for (const testPath of possiblePaths) {
+    console.log(`[Preload] Testando: ${testPath}`);
+    if (fs.existsSync(testPath)) {
+      console.log(`[Preload] ✅ Encontrado: ${testPath}`);
+      return testPath;
+    } else {
+      console.log(`[Preload] ❌ Não encontrado: ${testPath}`);
+    }
+  }
+  
+  const fallbackPath = path.join(__dirname, 'preload.js');
+  console.log(`[Preload] ⚠️ Usando fallback: ${fallbackPath}`);
+  return fallbackPath;
+}
 
 // Função para encontrar os caminhos corretos dos arquivos
 function findBackendPaths() {
@@ -90,15 +167,25 @@ function startBackend() {
       const nodePath = isDev ? '' : path.join(workingDir, 'node_modules');
       console.log('[Backend] NODE_PATH:', nodePath);
       
-      // Inicia processo do backend
-      backendProcess = spawn(nodeCommand, [backendPath], {
+      // Inicia processo do backend com otimizações agressivas
+      backendProcess = spawn(nodeCommand, [
+        '--max-old-space-size=96', // Reduzir ainda mais
+        '--optimize-for-size',
+        '--gc-interval=200', // Menos freqüente
+        '--no-lazy', // Compilar imediatamente
+        '--max-semi-space-size=8', // Limitar semi-space
+        backendPath
+      ], {
         cwd: workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { 
           ...process.env, 
           NODE_ENV: isDev ? 'development' : 'production',
-          NODE_PATH: nodePath
-        }
+          NODE_PATH: nodePath,
+          UV_THREADPOOL_SIZE: '2', // Reduzir threads
+          NODE_OPTIONS: '--max-old-space-size=96'
+        },
+        windowsHide: true // Ocultar janela do processo no Windows
       });
       
       let backendStarted = false;
@@ -151,11 +238,22 @@ function startBackend() {
   });
 }
 
-// Função para parar o backend
+// Função para parar o backend de forma mais rigorosa
 function stopBackend() {
-  if (backendProcess) {
+  if (backendProcess && !backendProcess.killed) {
     console.log('[Backend] Encerrando servidor...');
-    backendProcess.kill();
+    
+    // Tentar encerramento gracioso primeiro
+    backendProcess.kill('SIGTERM');
+    
+    // Forçar encerramento após 3 segundos se não responder
+    setTimeout(() => {
+      if (backendProcess && !backendProcess.killed) {
+        console.log('[Backend] Forçando encerramento...');
+        backendProcess.kill('SIGKILL');
+      }
+    }, 3000);
+    
     backendProcess = null;
   }
 }
@@ -195,10 +293,15 @@ async function createWindow() {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: path.join(__dirname, 'preload.js'),
+        preload: findPreloadPath(),
         webSecurity: false, // Permite acesso a conteúdo de outras origens (necessário para proxy de câmeras)
         allowRunningInsecureContent: true, // Permite conteúdo HTTP em contexto HTTPS
-        experimentalFeatures: true // Habilita recursos experimentais do Chromium
+        experimentalFeatures: false, // Desabilitar para economizar recursos
+        backgroundThrottling: false, // Evitar throttling em background
+        offscreen: false, // Renderização normal
+        enableRemoteModule: false, // Desabilitar módulo remoto
+        spellcheck: false, // Desabilitar corretor ortográfico
+        additionalArguments: ['--max-old-space-size=256'] // Limitar uso de memória
       },
     });
 
@@ -266,16 +369,41 @@ async function createWindow() {
 app.whenReady().then(() => {
   console.log('[Electron] App pronto, criando janela');
   
-  // Configura argumentos do Chromium para melhor suporte a vídeo/streaming
+  // Configurações otimizadas do Chromium para BAIXO USO DE CPU
   app.commandLine.appendSwitch('--disable-web-security');
-  app.commandLine.appendSwitch('--disable-features', 'VizDisplayCompositor');
-  app.commandLine.appendSwitch('--enable-experimental-web-platform-features');
+  app.commandLine.appendSwitch('--disable-features', 'VizDisplayCompositor,TranslateUI,BlinkGenPropertyTrees,MediaRouter,DialMediaRouteProvider');
   app.commandLine.appendSwitch('--autoplay-policy', 'no-user-gesture-required');
   app.commandLine.appendSwitch('--disable-background-timer-throttling');
   app.commandLine.appendSwitch('--disable-renderer-backgrounding');
   app.commandLine.appendSwitch('--ignore-certificate-errors');
   app.commandLine.appendSwitch('--allow-running-insecure-content');
   app.commandLine.appendSwitch('--disable-site-isolation-trials');
+  
+  // Otimizações AGRESSIVAS de performance e CPU
+  app.commandLine.appendSwitch('--max-old-space-size', '192'); // Reduzir mais
+  app.commandLine.appendSwitch('--optimize-for-size');
+  app.commandLine.appendSwitch('--memory-pressure-off');
+  app.commandLine.appendSwitch('--disable-background-networking');
+  app.commandLine.appendSwitch('--disable-default-apps');
+  app.commandLine.appendSwitch('--disable-extensions');
+  app.commandLine.appendSwitch('--disable-sync');
+  app.commandLine.appendSwitch('--disable-translate');
+  app.commandLine.appendSwitch('--disable-ipc-flooding-protection');
+  app.commandLine.appendSwitch('--renderer-process-limit', '2'); // Reduzir processos
+  app.commandLine.appendSwitch('--max-active-webgl-contexts', '2'); // Reduzir contextos
+  
+  // Novas otimizações para reduzir CPU
+  app.commandLine.appendSwitch('--disable-gpu-sandbox');
+  app.commandLine.appendSwitch('--disable-software-rasterizer');
+  app.commandLine.appendSwitch('--disable-threaded-animation');
+  app.commandLine.appendSwitch('--disable-threaded-scrolling');
+  app.commandLine.appendSwitch('--disable-checker-imaging');
+  app.commandLine.appendSwitch('--disable-new-content-rendering-timeout');
+  app.commandLine.appendSwitch('--disable-partial-raster');
+  app.commandLine.appendSwitch('--disable-skia-runtime-opts');
+  app.commandLine.appendSwitch('--disable-low-latency-dxva');
+  app.commandLine.appendSwitch('--disable-hardware-acceleration'); // Usar CPU em vez de GPU para vídeo
+  app.commandLine.appendSwitch('--num-raster-threads', '2'); // Limitar threads de rasterização
   
   createWindow();
 
@@ -288,17 +416,47 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', function () {
+  isAppQuitting = true;
+  
+  // Limpar interval de limpeza de memória
+  if (memoryCleanupInterval) {
+    clearInterval(memoryCleanupInterval);
+  }
+  
+  console.log('[Electron] Todas as janelas fechadas, encerrando app');
+  stopBackend(); // Para o backend antes de encerrar
+  
   if (process.platform !== 'darwin') {
-    console.log('[Electron] Todas as janelas fechadas, encerrando app');
-    stopBackend(); // Para o backend antes de encerrar
     app.quit();
   }
 });
 
 // Cleanup quando app encerra
-app.on('before-quit', () => {
-  console.log('[Electron] App encerrando, parando backend...');
-  stopBackend();
+app.on('before-quit', (event) => {
+  if (!isAppQuitting) {
+    isAppQuitting = true;
+    console.log('[Electron] App encerrando, parando backend...');
+    
+    // Limpar interval
+    if (memoryCleanupInterval) {
+      clearInterval(memoryCleanupInterval);
+    }
+    
+    stopBackend();
+    
+    // Dar um tempo para limpeza
+    setTimeout(() => {
+      app.exit(0);
+    }, 1000);
+  }
+});
+
+// Handler adicional para garantir cleanup em caso de crash
+process.on('exit', () => {
+  console.log('[Process] Processo encerrando, cleanup final...');
+  if (backendProcess && !backendProcess.killed) {
+    backendProcess.kill('SIGKILL');
+  }
 });
 
 // Handler para toggle do DevTools

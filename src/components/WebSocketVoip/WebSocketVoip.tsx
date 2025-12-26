@@ -1,5 +1,5 @@
 import { Box, Chip, CircularProgress, IconButton } from '@mui/material';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, memo } from 'react';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CallEndIcon from '@mui/icons-material/CallEnd';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
@@ -19,7 +19,7 @@ interface WebSocketVoipProps extends React.ImgHTMLAttributes<HTMLImageElement> {
     onLoadingComplete?: () => void; // Callback quando o carregamento termina
 }
 
-export const WebSocketVoip = ({ 
+export const WebSocketVoip = memo<WebSocketVoipProps>(({ 
     cameraId, 
     onClick, 
     isIncomingCall = false, 
@@ -30,7 +30,7 @@ export const WebSocketVoip = ({
     hasVoip = true, 
     onLoadingComplete, 
     ...rest 
-}: WebSocketVoipProps) => {
+}) => {
     const imgRef = useRef<HTMLImageElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
@@ -505,4 +505,7 @@ export const WebSocketVoip = ({
             )}
         </Box>
     );
-};
+});
+
+// Comparador para React.memo
+WebSocketVoip.displayName = 'WebSocketVoip';

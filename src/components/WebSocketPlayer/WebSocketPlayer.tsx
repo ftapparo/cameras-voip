@@ -1,13 +1,13 @@
 import { Box } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, memo } from 'react';
 
 interface WebSocketPlayerProps extends React.ImgHTMLAttributes<HTMLImageElement> {
     cameraId: string;
     lazy?: boolean;
 }
 
-export const WebSocketPlayer = ({ cameraId, lazy = true, ...rest }: WebSocketPlayerProps) => {
+export const WebSocketPlayer = memo<WebSocketPlayerProps>(({ cameraId, lazy = true, ...rest }) => {
     const imgRef = useRef<HTMLImageElement | null>(null);
     const boxRef = useRef<HTMLDivElement | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
@@ -236,4 +236,7 @@ export const WebSocketPlayer = ({ cameraId, lazy = true, ...rest }: WebSocketPla
             )}
         </Box>
     );
-};
+});
+
+// Comparador para React.memo - só re-renderiza se cameraId mudar
+WebSocketPlayer.displayName = 'WebSocketPlayer';
